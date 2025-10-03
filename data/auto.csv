@@ -1,0 +1,16 @@
+make,price,mpg,rep78,headroom,trunk,weight,length,turn,displacement,gear_ratio,foreign
+AMC Concord,4099,22,3,2.5,11,2930,186,40,121,3.58,Domestic
+AMC Pacer,4749,17,3,3.0,11,3350,173,40,258,2.53,Domestic
+AMC Spirit,3799,22,.,4.0,12,2640,168,35,121,3.08,Domestic
+Buick Century,4816,20,3,4.5,16,3250,196,40,196,2.93,Domestic
+Buick Electra,7827,15,4,4.0,20,4080,222,43,350,2.41,Domestic
+Buick LeSabre,5788,18,3,4.0,21,3670,218,43,231,2.73,Domestic
+Buick Opel,4453,26,.,3.0,10,2230,170,34,151,2.73,Domestic
+Audi Fox,6295,29,3,2.5,11,2070,174,36,97,3.70,Foreign
+Audi 5000,9690,17,5,3.0,15,2830,189,37,131,3.20,Foreign
+BMW 320i,9735,25,4,2.5,12,2650,177,36,121,3.64,Foreign
+Datsun 210,4589,35,5,2.5,11,2020,165,32,85,3.70,Foreign
+Datsun 510,5079,24,4,3.5,12,2280,170,34,119,3.89,Foreign
+Datsun 810,8129,20,4,3.0,12,2750,184,38,146,3.54,Foreign
+Honda Accord,5798,25,5,3.0,15,2240,172,36,107,3.05,Foreign
+VW Rabbit,4697,25,4,4.0,15,1930,155,35,89,3.78,Foreign
