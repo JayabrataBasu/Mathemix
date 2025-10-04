@@ -1,3 +1,5 @@
 .mathemix/
 __pycache__/
 *.pyc
+/target/
+*.log

@@ -1,5 +1,6 @@
-pandas>=2.1,<3
-statsmodels>=0.14,<1
-streamlit>=1.39,<2
-matplotlib>=3.8,<4
-seaborn>=0.13,<1
+# Legacy requirements placeholder
+#
+# Dependencies are now managed via `pyproject.toml` (see the [project]
+# dependencies section). This file is kept to avoid breaking automation that
+# still calls `pip install -r requirements.txt`; we redirect those callers to
+# use maturin + the Python metadata instead.

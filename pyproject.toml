@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.6,<2"]
+build-backend = "maturin"
+
+[project]
+name = "mathemixx"
+version = "0.1.0"
+description = "MatheMixX statistical desktop application"
+requires-python = ">=3.11"
+authors = [{ name = "MatheMixX Developers" }]
+license = { text = "MIT" }
+readme = "README.md"
+dependencies = [
+    "pyside6>=6.7",
+    "pandas>=2.1",
+    "polars>=0.20",
+    "statsmodels>=0.14",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "pyarrow>=15",
+]
+
+[tool.maturin]
+python-source = "python"
+module-name = "mathemixx_core"
+features = []
+strip = true
+profile = "release"
