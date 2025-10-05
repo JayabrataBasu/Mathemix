@@ -50,6 +50,13 @@ impl DataSet {
             .collect()
     }
 
+    pub fn get_column(&self, name: &str) -> Result<Series> {
+        self.frame
+            .column(name)
+            .map(|col| col.as_materialized_series().clone())
+            .map_err(|_| MatheMixxError::ColumnNotFound(name.to_string()))
+    }
+
     pub fn numeric_column_names(&self) -> Vec<String> {
         self.frame
             .get_columns()

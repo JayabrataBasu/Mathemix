@@ -17,6 +17,7 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Slot
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -37,6 +38,12 @@ from PySide6.QtWidgets import (
 
 # Import directly from the installed Rust bindings wheel
 import mathemixx_core as mx
+
+# Import Phase 6 visualization module
+import sys
+from pathlib import Path as PathLib
+sys.path.insert(0, str(PathLib(__file__).parent.parent))
+import plots
 
 matplotlib.use("QtAgg")
 
@@ -98,9 +105,16 @@ class PlotCanvas(FigureCanvasQTAgg):
     def __init__(self) -> None:
         self.fig, self.ax = plt.subplots(figsize=(6, 4))
         super().__init__(self.fig)
+        self.current_result: mx.OlsResult | None = None
 
     def clear(self) -> None:
         self.ax.clear()
+        self.draw()
+
+    def clear_figure(self) -> None:
+        """Clear the entire figure (for multi-subplot plots)."""
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111)
         self.draw()
 
     def plot_histogram(self, data: pd.Series, title: str) -> None:
@@ -125,6 +139,75 @@ class PlotCanvas(FigureCanvasQTAgg):
         self.ax.set_ylabel(y.name)
         self.fig.tight_layout()
         self.draw()
+    
+    def plot_diagnostic_suite(self, result: mx.OlsResult) -> None:
+        """Plot regression diagnostic suite using Phase 6 functionality."""
+        self.current_result = result
+        self.fig.clear()
+        
+        # Create 2x3 subplot grid
+        axes = self.fig.subplots(2, 3)
+        axes = axes.flatten()
+        
+        # Plot each diagnostic
+        plots.plot_residual_fitted(result, ax=axes[0])
+        plots.plot_qq(result, ax=axes[1])
+        plots.plot_scale_location(result, ax=axes[2])
+        plots.plot_residuals_leverage(result, ax=axes[3])
+        plots.plot_residual_histogram(result, ax=axes[4])
+        
+        # Summary statistics in last panel
+        axes[5].axis('off')
+        summary_text = f"""
+    Regression Summary
+    ─────────────────────
+    Dependent: {result.dependent}
+    R²: {result.r_squared():.4f}
+    Adj. R²: {result.adj_r_squared():.4f}
+    Observations: {result.nobs()}
+    """
+        axes[5].text(0.1, 0.5, summary_text, fontsize=11, family='monospace',
+                    verticalalignment='center')
+        
+        self.fig.tight_layout()
+        self.draw()
+    
+    def plot_individual_diagnostic(self, result: mx.OlsResult, plot_type: str) -> None:
+        """Plot a single diagnostic plot."""
+        self.current_result = result
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111)
+        
+        if plot_type == "residual_fitted":
+            plots.plot_residual_fitted(result, ax=self.ax)
+        elif plot_type == "qq":
+            plots.plot_qq(result, ax=self.ax)
+        elif plot_type == "scale_location":
+            plots.plot_scale_location(result, ax=self.ax)
+        elif plot_type == "residuals_leverage":
+            plots.plot_residuals_leverage(result, ax=self.ax)
+        elif plot_type == "histogram":
+            plots.plot_residual_histogram(result, ax=self.ax)
+        
+        self.fig.tight_layout()
+        self.draw()
+    
+    def plot_exploratory(self, dataset: mx.DataSet, plot_type: str, column: str = None) -> None:
+        """Plot exploratory data visualization."""
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111)
+        
+        if plot_type == "boxplot" and column:
+            plots.plot_boxplot(dataset, column, ax=self.ax)
+        elif plot_type == "histogram" and column:
+            plots.plot_histogram(dataset, column, kde=True, ax=self.ax)
+        elif plot_type == "violin" and column:
+            plots.plot_violin(dataset, column, ax=self.ax)
+        elif plot_type == "heatmap":
+            plots.plot_correlation_heatmap(dataset, method='pearson', ax=self.ax)
+        
+        self.fig.tight_layout()
+        self.draw()
 
 
 class MainWindow(QMainWindow):
@@ -135,6 +218,7 @@ class MainWindow(QMainWindow):
         self.dataset: mx.DataSet | None = None
         self.dataset_path: Path | None = None
         self.dataframe: pd.DataFrame | None = None
+        self.current_regression_result: mx.OlsResult | None = None
         self.log_path = Path("logs") / f"session_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.session_log = SessionLog(self.log_path)
@@ -174,6 +258,38 @@ class MainWindow(QMainWindow):
         self.regress_button.clicked.connect(self.handle_regression)
         self.regress_button.setEnabled(False)
         control_layout.addWidget(self.regress_button)
+
+        self.diagnostic_button = QPushButton("📊 Diagnostic Plots")
+        self.diagnostic_button.clicked.connect(self.show_diagnostic_plots)
+        self.diagnostic_button.setEnabled(False)
+        control_layout.addWidget(self.diagnostic_button)
+
+        control_layout.addWidget(QLabel("─" * 30))
+        control_layout.addWidget(QLabel("Exploratory Plots"))
+        
+        exploratory_layout = QVBoxLayout()
+        
+        self.boxplot_button = QPushButton("Box Plot")
+        self.boxplot_button.clicked.connect(lambda: self.show_exploratory_plot("boxplot"))
+        self.boxplot_button.setEnabled(False)
+        exploratory_layout.addWidget(self.boxplot_button)
+        
+        self.histogram_button = QPushButton("Histogram + KDE")
+        self.histogram_button.clicked.connect(lambda: self.show_exploratory_plot("histogram"))
+        self.histogram_button.setEnabled(False)
+        exploratory_layout.addWidget(self.histogram_button)
+        
+        self.heatmap_button = QPushButton("Correlation Heatmap")
+        self.heatmap_button.clicked.connect(lambda: self.show_exploratory_plot("heatmap"))
+        self.heatmap_button.setEnabled(False)
+        exploratory_layout.addWidget(self.heatmap_button)
+        
+        self.violin_button = QPushButton("Violin Plot")
+        self.violin_button.clicked.connect(lambda: self.show_exploratory_plot("violin"))
+        self.violin_button.setEnabled(False)
+        exploratory_layout.addWidget(self.violin_button)
+        
+        control_layout.addLayout(exploratory_layout)
 
         control_layout.addStretch(1)
 
@@ -231,6 +347,16 @@ class MainWindow(QMainWindow):
         export_log.triggered.connect(self.show_log_location)
         toolbar.addAction(export_log)
 
+        toolbar.addSeparator()
+
+        export_plot = QAction("💾 Save Plot", self)
+        export_plot.triggered.connect(self.export_current_plot)
+        toolbar.addAction(export_plot)
+
+        set_style = QAction("🎨 Plot Style", self)
+        set_style.triggered.connect(self.change_plot_style)
+        toolbar.addAction(set_style)
+
     @Slot()
     def open_csv(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
@@ -254,6 +380,13 @@ class MainWindow(QMainWindow):
         self.data_model.set_frame(frame.head(100))
         self.summarize_button.setEnabled(True)
         self.regress_button.setEnabled(True)
+        
+        # Enable exploratory plot buttons
+        self.boxplot_button.setEnabled(True)
+        self.histogram_button.setEnabled(True)
+        self.heatmap_button.setEnabled(True)
+        self.violin_button.setEnabled(True)
+        
         if frame.columns.size:
             self.dependent_input.setText(frame.columns[0])
 
@@ -303,6 +436,8 @@ class MainWindow(QMainWindow):
             return
         try:
             result = self.dataset.regress_ols(dependent, independents, True)
+            self.current_regression_result = result
+            self.diagnostic_button.setEnabled(True)
         except Exception as exc:  # pylint: disable=broad-except
             logging.exception("Regression failed", exc_info=exc)
             QMessageBox.critical(self, "Regression", f"Regression failed: {exc}")
@@ -378,6 +513,111 @@ class MainWindow(QMainWindow):
     @Slot()
     def show_log_location(self) -> None:
         QMessageBox.information(self, "Log", f"Session log: {self.log_path}")
+
+    @Slot()
+    def show_diagnostic_plots(self) -> None:
+        """Show comprehensive regression diagnostic plots."""
+        if not self.current_regression_result:
+            QMessageBox.warning(self, "Diagnostics", "Run a regression first")
+            return
+        
+        try:
+            # Switch to Plots tab
+            right_tabs = self.findChild(QTabWidget)
+            if right_tabs:
+                right_tabs.setCurrentIndex(2)  # Plots tab
+            
+            # Plot diagnostic suite
+            self.plot_canvas.plot_diagnostic_suite(self.current_regression_result)
+            self.log_command("diagnostic_plots", "Displayed regression diagnostic suite")
+            
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.exception("Failed to create diagnostic plots", exc_info=exc)
+            QMessageBox.critical(self, "Error", f"Failed to create plots: {exc}")
+    
+    @Slot()
+    def show_exploratory_plot(self, plot_type: str) -> None:
+        """Show exploratory data visualization."""
+        if not self.dataset:
+            QMessageBox.warning(self, "Plots", "Load a dataset first")
+            return
+        
+        # Get selected variable from list or dependent input
+        selected = self.selected_independents()
+        if selected:
+            column = selected[0]
+        else:
+            column = self.dependent_input.text().strip()
+        
+        if not column and plot_type != "heatmap":
+            QMessageBox.warning(self, "Plots", "Select a variable first")
+            return
+        
+        try:
+            # Switch to Plots tab
+            right_tabs = self.findChild(QTabWidget)
+            if right_tabs:
+                right_tabs.setCurrentIndex(2)  # Plots tab
+            
+            # Create plot
+            self.plot_canvas.plot_exploratory(self.dataset, plot_type, column)
+            
+            plot_names = {
+                "boxplot": "Box Plot",
+                "histogram": "Histogram with KDE",
+                "heatmap": "Correlation Heatmap",
+                "violin": "Violin Plot"
+            }
+            self.log_command(f"{plot_type} {column if column else ''}", 
+                           f"Displayed {plot_names.get(plot_type, plot_type)}")
+            
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.exception(f"Failed to create {plot_type} plot", exc_info=exc)
+            QMessageBox.critical(self, "Error", f"Failed to create plot: {exc}")
+    
+    @Slot()
+    def export_current_plot(self) -> None:
+        """Export the current plot to file."""
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self, 
+            "Save Plot", 
+            "plot.png", 
+            "PNG Image (*.png);;PDF Document (*.pdf);;SVG Vector (*.svg);;JPEG Image (*.jpg)"
+        )
+        if not file_path:
+            return
+        
+        try:
+            plots.save_plot(file_path, self.plot_canvas.fig, dpi=300)
+            QMessageBox.information(self, "Export", f"Plot saved to {file_path}")
+            self.log_command(f"export_plot {file_path}", f"Saved plot to {file_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.exception("Failed to export plot", exc_info=exc)
+            QMessageBox.critical(self, "Error", f"Failed to export plot: {exc}")
+    
+    @Slot()
+    def change_plot_style(self) -> None:
+        """Change the plotting style."""
+        from PySide6.QtWidgets import QInputDialog
+        
+        styles = ['whitegrid', 'darkgrid', 'white', 'dark', 'ticks']
+        style, ok = QInputDialog.getItem(
+            self, 
+            "Plot Style", 
+            "Select a style:", 
+            styles, 
+            0, 
+            False
+        )
+        
+        if ok and style:
+            try:
+                plots.set_plot_style(style)
+                QMessageBox.information(self, "Style", f"Plot style set to: {style}")
+                self.log_command(f"set_plot_style {style}", f"Changed style to {style}")
+            except Exception as exc:  # pylint: disable=broad-except
+                logging.exception("Failed to set style", exc_info=exc)
+                QMessageBox.critical(self, "Error", f"Failed to set style: {exc}")
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self.plot_canvas.clear()

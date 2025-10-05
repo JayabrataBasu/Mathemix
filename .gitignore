@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 /target/
 *.log
+test-png/
+temp_data/
+*.csv
+*.tex
+*.png
+logs/

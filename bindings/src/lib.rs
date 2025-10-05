@@ -4,9 +4,11 @@ use std::io::Write;
 use std::sync::Arc;
 
 use ::mathemixx_core::{
-    regress, summarize_numeric, ColumnInfo, ColumnType, CorrelationMatrix, CorrelationMethod,
-    DataSet, EnhancedSummary, FilterCondition, FrequencyRow, FrequencyTable, MatheMixxError,
-    OlsOptions, OlsResult, TTestResult, Transform,
+    regress, summarize_numeric, BoxPlotData, ColumnInfo, ColumnType, CorrelationMatrix,
+    CorrelationMethod, DataSet, EnhancedSummary, FilterCondition, FrequencyRow, FrequencyTable,
+    HeatmapData, HistogramData, MatheMixxError, OlsOptions, OlsResult, PairPlotData, QQPlotData,
+    ResidualFittedData, ResidualHistogramData, ResidualsLeverageData, ScaleLocationData,
+    TTestResult, Transform, ViolinPlotData,
 };
 use polars::io::SerWriter;
 use polars::prelude::CsvWriter;
@@ -278,6 +280,225 @@ impl From<TTestResult> for PyTTestResult {
             ci_lower: result.confidence_interval.0,
             ci_upper: result.confidence_interval.1,
             significant: result.significant,
+        }
+    }
+}
+
+// ============================================================================
+// Phase 6: Visualization wrapper classes
+// ============================================================================
+
+#[pyclass(name = "ResidualFittedData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyResidualFittedData {
+    #[pyo3(get)]
+    pub fitted_values: Vec<f64>,
+    #[pyo3(get)]
+    pub residuals: Vec<f64>,
+}
+
+impl From<ResidualFittedData> for PyResidualFittedData {
+    fn from(data: ResidualFittedData) -> Self {
+        PyResidualFittedData {
+            fitted_values: data.fitted_values,
+            residuals: data.residuals,
+        }
+    }
+}
+
+#[pyclass(name = "QQPlotData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyQQPlotData {
+    #[pyo3(get)]
+    pub theoretical_quantiles: Vec<f64>,
+    #[pyo3(get)]
+    pub sample_quantiles: Vec<f64>,
+}
+
+impl From<QQPlotData> for PyQQPlotData {
+    fn from(data: QQPlotData) -> Self {
+        PyQQPlotData {
+            theoretical_quantiles: data.theoretical_quantiles,
+            sample_quantiles: data.sample_quantiles,
+        }
+    }
+}
+
+#[pyclass(name = "ScaleLocationData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyScaleLocationData {
+    #[pyo3(get)]
+    pub fitted_values: Vec<f64>,
+    #[pyo3(get)]
+    pub sqrt_abs_residuals: Vec<f64>,
+}
+
+impl From<ScaleLocationData> for PyScaleLocationData {
+    fn from(data: ScaleLocationData) -> Self {
+        PyScaleLocationData {
+            fitted_values: data.fitted_values,
+            sqrt_abs_residuals: data.sqrt_abs_residuals,
+        }
+    }
+}
+
+#[pyclass(name = "ResidualsLeverageData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyResidualsLeverageData {
+    #[pyo3(get)]
+    pub leverage: Vec<f64>,
+    #[pyo3(get)]
+    pub standardized_residuals: Vec<f64>,
+    #[pyo3(get)]
+    pub cooks_distance: Vec<f64>,
+}
+
+impl From<ResidualsLeverageData> for PyResidualsLeverageData {
+    fn from(data: ResidualsLeverageData) -> Self {
+        PyResidualsLeverageData {
+            leverage: data.leverage,
+            standardized_residuals: data.standardized_residuals,
+            cooks_distance: data.cooks_distance,
+        }
+    }
+}
+
+#[pyclass(name = "ResidualHistogramData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyResidualHistogramData {
+    #[pyo3(get)]
+    pub residuals: Vec<f64>,
+    #[pyo3(get)]
+    pub bins: usize,
+}
+
+impl From<ResidualHistogramData> for PyResidualHistogramData {
+    fn from(data: ResidualHistogramData) -> Self {
+        PyResidualHistogramData {
+            residuals: data.residuals,
+            bins: data.bins,
+        }
+    }
+}
+
+#[pyclass(name = "BoxPlotData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyBoxPlotData {
+    #[pyo3(get)]
+    pub variable: String,
+    #[pyo3(get)]
+    pub min: f64,
+    #[pyo3(get)]
+    pub q1: f64,
+    #[pyo3(get)]
+    pub median: f64,
+    #[pyo3(get)]
+    pub q3: f64,
+    #[pyo3(get)]
+    pub max: f64,
+    #[pyo3(get)]
+    pub outliers: Vec<f64>,
+    #[pyo3(get)]
+    pub mean: f64,
+}
+
+impl From<BoxPlotData> for PyBoxPlotData {
+    fn from(data: BoxPlotData) -> Self {
+        PyBoxPlotData {
+            variable: data.variable,
+            min: data.min,
+            q1: data.q1,
+            median: data.median,
+            q3: data.q3,
+            max: data.max,
+            outliers: data.outliers,
+            mean: data.mean,
+        }
+    }
+}
+
+#[pyclass(name = "HistogramData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyHistogramData {
+    #[pyo3(get)]
+    pub variable: String,
+    #[pyo3(get)]
+    pub values: Vec<f64>,
+    #[pyo3(get)]
+    pub bins: usize,
+}
+
+impl From<HistogramData> for PyHistogramData {
+    fn from(data: HistogramData) -> Self {
+        PyHistogramData {
+            variable: data.variable,
+            values: data.values,
+            bins: data.bins,
+        }
+    }
+}
+
+#[pyclass(name = "HeatmapData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyHeatmapData {
+    #[pyo3(get)]
+    pub variables: Vec<String>,
+    #[pyo3(get)]
+    pub correlation_matrix: Vec<Vec<f64>>,
+    #[pyo3(get)]
+    pub method: String,
+}
+
+impl From<HeatmapData> for PyHeatmapData {
+    fn from(data: HeatmapData) -> Self {
+        PyHeatmapData {
+            variables: data.variables,
+            correlation_matrix: data.correlation_matrix,
+            method: data.method,
+        }
+    }
+}
+
+#[pyclass(name = "PairPlotData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyPairPlotData {
+    #[pyo3(get)]
+    pub variables: Vec<String>,
+}
+
+#[pymethods]
+impl PyPairPlotData {
+    /// Get data for a specific variable
+    pub fn get_data(&self, py: Python, variable: &str) -> PyResult<Vec<f64>> {
+        // This will be populated when we add the method
+        Ok(vec![])
+    }
+}
+
+impl From<PairPlotData> for PyPairPlotData {
+    fn from(data: PairPlotData) -> Self {
+        // Store the HashMap data temporarily
+        // We'll convert it to a proper structure
+        PyPairPlotData {
+            variables: data.variables,
+        }
+    }
+}
+
+#[pyclass(name = "ViolinPlotData", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyViolinPlotData {
+    #[pyo3(get)]
+    pub variable: String,
+    #[pyo3(get)]
+    pub values: Vec<f64>,
+}
+
+impl From<ViolinPlotData> for PyViolinPlotData {
+    fn from(data: ViolinPlotData) -> Self {
+        PyViolinPlotData {
+            variable: data.variable,
+            values: data.values,
         }
     }
 }
@@ -557,6 +778,59 @@ impl PyDataSet {
             .map_err(mathemixx_error_to_pyerr)?;
         Ok(result.into())
     }
+
+    // ========================================================================
+    // Phase 6: General Visualization Data Methods
+    // ========================================================================
+
+    /// Get box plot data for a column
+    pub fn box_plot_data(&self, column: &str) -> PyResult<PyBoxPlotData> {
+        let data = self
+            .inner
+            .box_plot_data(column)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get histogram data for a column
+    pub fn histogram_data(&self, column: &str, bins: Option<usize>) -> PyResult<PyHistogramData> {
+        let data = self
+            .inner
+            .histogram_data(column, bins)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get correlation heatmap data
+    pub fn heatmap_data(
+        &self,
+        columns: Option<Vec<String>>,
+        method: Option<String>,
+    ) -> PyResult<PyHeatmapData> {
+        let data = self
+            .inner
+            .heatmap_data(columns, method)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get pair plot data
+    pub fn pair_plot_data(&self, columns: Option<Vec<String>>) -> PyResult<PyPairPlotData> {
+        let data = self
+            .inner
+            .pair_plot_data(columns)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get violin plot data for a column
+    pub fn violin_plot_data(&self, column: &str) -> PyResult<PyViolinPlotData> {
+        let data = self
+            .inner
+            .violin_plot_data(column)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
 }
 
 #[pymethods]
@@ -688,6 +962,58 @@ impl PyOlsResult {
 
     pub fn table(&self) -> Vec<PyCoefficientRow> {
         self.coefficient_rows()
+    }
+
+    // ========================================================================
+    // Phase 6: Regression Diagnostic Plot Data Methods
+    // ========================================================================
+
+    /// Get data for residual vs fitted plot
+    pub fn residual_fitted_data(&self) -> PyResult<PyResidualFittedData> {
+        let data = self
+            .inner
+            .residual_fitted_data()
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get data for Q-Q plot (normal probability plot)
+    pub fn qq_plot_data(&self) -> PyResult<PyQQPlotData> {
+        let data = self
+            .inner
+            .qq_plot_data()
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get data for scale-location plot
+    pub fn scale_location_data(&self) -> PyResult<PyScaleLocationData> {
+        let data = self
+            .inner
+            .scale_location_data()
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get data for residuals vs leverage plot
+    pub fn residuals_leverage_data(&self) -> PyResult<PyResidualsLeverageData> {
+        let data = self
+            .inner
+            .residuals_leverage_data()
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
+    }
+
+    /// Get data for residual histogram
+    pub fn residual_histogram_data(
+        &self,
+        bins: Option<usize>,
+    ) -> PyResult<PyResidualHistogramData> {
+        let data = self
+            .inner
+            .residual_histogram_data(bins)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(data.into())
     }
 }
 
@@ -822,6 +1148,17 @@ fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_class::<PyFrequencyRow>()?;
     module.add_class::<PyFrequencyTable>()?;
     module.add_class::<PyTTestResult>()?;
+    // Phase 6: Visualization classes
+    module.add_class::<PyResidualFittedData>()?;
+    module.add_class::<PyQQPlotData>()?;
+    module.add_class::<PyScaleLocationData>()?;
+    module.add_class::<PyResidualsLeverageData>()?;
+    module.add_class::<PyResidualHistogramData>()?;
+    module.add_class::<PyBoxPlotData>()?;
+    module.add_class::<PyHistogramData>()?;
+    module.add_class::<PyHeatmapData>()?;
+    module.add_class::<PyPairPlotData>()?;
+    module.add_class::<PyViolinPlotData>()?;
     module.add_function(wrap_pyfunction!(load_csv, module)?)?;
     module.add_function(wrap_pyfunction!(summarize_dataset, module)?)?;
     module.add_function(wrap_pyfunction!(regress_dataset, module)?)?;
