@@ -4,7 +4,9 @@ use std::io::Write;
 use std::sync::Arc;
 
 use ::mathemixx_core::{
-    regress, summarize_numeric, DataSet, MatheMixxError, OlsOptions, OlsResult,
+    regress, summarize_numeric, ColumnInfo, ColumnType, CorrelationMatrix, CorrelationMethod,
+    DataSet, EnhancedSummary, FilterCondition, FrequencyRow, FrequencyTable, MatheMixxError,
+    OlsOptions, OlsResult, TTestResult, Transform,
 };
 use polars::io::SerWriter;
 use polars::prelude::CsvWriter;
@@ -61,6 +63,227 @@ pub struct PyCoefficientRow {
     pub ci_upper: f64,
 }
 
+// ============================================================================
+// Phase 4 & 5: New wrapper classes
+// ============================================================================
+
+#[pyclass(name = "ColumnInfo", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyColumnInfo {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub dtype: String, // "numeric", "integer", "string", "boolean", "temporal", "mixed"
+    #[pyo3(get)]
+    pub null_count: usize,
+    #[pyo3(get)]
+    pub total_count: usize,
+    #[pyo3(get)]
+    pub null_percentage: f64,
+}
+
+impl From<ColumnInfo> for PyColumnInfo {
+    fn from(info: ColumnInfo) -> Self {
+        let dtype_str = match info.dtype {
+            ColumnType::Numeric => "numeric",
+            ColumnType::Integer => "integer",
+            ColumnType::String => "string",
+            ColumnType::Boolean => "boolean",
+            ColumnType::Temporal => "temporal",
+            ColumnType::Mixed => "mixed",
+        };
+        PyColumnInfo {
+            name: info.name,
+            dtype: dtype_str.to_string(),
+            null_count: info.null_count,
+            total_count: info.total_count,
+            null_percentage: info.null_percentage,
+        }
+    }
+}
+
+#[pyclass(name = "CorrelationMatrix", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyCorrelationMatrix {
+    #[pyo3(get)]
+    pub variables: Vec<String>,
+    #[pyo3(get)]
+    pub matrix: Vec<Vec<f64>>,
+    #[pyo3(get)]
+    pub method: String,
+}
+
+#[pymethods]
+impl PyCorrelationMatrix {
+    pub fn get(&self, var1: &str, var2: &str) -> Option<f64> {
+        let idx1 = self.variables.iter().position(|v| v == var1)?;
+        let idx2 = self.variables.iter().position(|v| v == var2)?;
+        Some(self.matrix[idx1][idx2])
+    }
+}
+
+impl From<CorrelationMatrix> for PyCorrelationMatrix {
+    fn from(corr: CorrelationMatrix) -> Self {
+        PyCorrelationMatrix {
+            variables: corr.variables,
+            matrix: corr.matrix,
+            method: corr.method,
+        }
+    }
+}
+
+#[pyclass(name = "EnhancedSummary", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyEnhancedSummary {
+    #[pyo3(get)]
+    pub variable: String,
+    #[pyo3(get)]
+    pub count: usize,
+    #[pyo3(get)]
+    pub null_count: usize,
+    #[pyo3(get)]
+    pub mean: f64,
+    #[pyo3(get)]
+    pub median: f64,
+    #[pyo3(get)]
+    pub std: f64,
+    #[pyo3(get)]
+    pub variance: f64,
+    #[pyo3(get)]
+    pub min: f64,
+    #[pyo3(get)]
+    pub max: f64,
+    #[pyo3(get)]
+    pub q25: f64,
+    #[pyo3(get)]
+    pub q50: f64,
+    #[pyo3(get)]
+    pub q75: f64,
+    #[pyo3(get)]
+    pub range: f64,
+    #[pyo3(get)]
+    pub iqr: f64,
+    #[pyo3(get)]
+    pub skewness: Option<f64>,
+    #[pyo3(get)]
+    pub kurtosis: Option<f64>,
+}
+
+impl From<EnhancedSummary> for PyEnhancedSummary {
+    fn from(summary: EnhancedSummary) -> Self {
+        PyEnhancedSummary {
+            variable: summary.variable,
+            count: summary.count,
+            null_count: summary.null_count,
+            mean: summary.mean,
+            median: summary.median,
+            std: summary.std,
+            variance: summary.variance,
+            min: summary.min,
+            max: summary.max,
+            q25: summary.q25,
+            q50: summary.q50,
+            q75: summary.q75,
+            range: summary.range,
+            iqr: summary.iqr,
+            skewness: summary.skewness,
+            kurtosis: summary.kurtosis,
+        }
+    }
+}
+
+#[pyclass(name = "FrequencyRow", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyFrequencyRow {
+    #[pyo3(get)]
+    pub value: String,
+    #[pyo3(get)]
+    pub count: usize,
+    #[pyo3(get)]
+    pub percentage: f64,
+    #[pyo3(get)]
+    pub cumulative_count: usize,
+    #[pyo3(get)]
+    pub cumulative_percentage: f64,
+}
+
+impl From<FrequencyRow> for PyFrequencyRow {
+    fn from(row: FrequencyRow) -> Self {
+        PyFrequencyRow {
+            value: row.value,
+            count: row.count,
+            percentage: row.percentage,
+            cumulative_count: row.cumulative_count,
+            cumulative_percentage: row.cumulative_percentage,
+        }
+    }
+}
+
+#[pyclass(name = "FrequencyTable", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyFrequencyTable {
+    #[pyo3(get)]
+    pub variable: String,
+    #[pyo3(get)]
+    pub total_count: usize,
+    #[pyo3(get)]
+    pub unique_count: usize,
+    #[pyo3(get)]
+    pub rows: Vec<PyFrequencyRow>,
+}
+
+impl From<FrequencyTable> for PyFrequencyTable {
+    fn from(table: FrequencyTable) -> Self {
+        PyFrequencyTable {
+            variable: table.variable,
+            total_count: table.total_count,
+            unique_count: table.unique_count,
+            rows: table.rows.into_iter().map(|r| r.into()).collect(),
+        }
+    }
+}
+
+#[pyclass(name = "TTestResult", module = "mathemixx_core")]
+#[derive(Clone, Serialize)]
+pub struct PyTTestResult {
+    #[pyo3(get)]
+    pub test_type: String,
+    #[pyo3(get)]
+    pub statistic: f64,
+    #[pyo3(get)]
+    pub degrees_of_freedom: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub mean1: f64,
+    #[pyo3(get)]
+    pub mean2: Option<f64>,
+    #[pyo3(get)]
+    pub ci_lower: f64,
+    #[pyo3(get)]
+    pub ci_upper: f64,
+    #[pyo3(get)]
+    pub significant: bool,
+}
+
+impl From<TTestResult> for PyTTestResult {
+    fn from(result: TTestResult) -> Self {
+        PyTTestResult {
+            test_type: result.test_type,
+            statistic: result.statistic,
+            degrees_of_freedom: result.degrees_of_freedom,
+            p_value: result.p_value,
+            mean1: result.mean1,
+            mean2: result.mean2,
+            ci_lower: result.confidence_interval.0,
+            ci_upper: result.confidence_interval.1,
+            significant: result.significant,
+        }
+    }
+}
+
+// ============================================================================
+
 #[pymethods]
 impl PyDataSet {
     #[new]
@@ -86,6 +309,14 @@ impl PyDataSet {
         self.inner.column_names()
     }
 
+    pub fn n_rows(&self) -> usize {
+        self.inner.height()
+    }
+
+    pub fn n_cols(&self) -> usize {
+        self.inner.width()
+    }
+
     pub fn numeric_columns(&self) -> Vec<String> {
         self.inner.numeric_column_names()
     }
@@ -108,6 +339,223 @@ impl PyDataSet {
         let result = regress(&self.inner, dependent, &independents, opts)
             .map_err(mathemixx_error_to_pyerr)?;
         Ok(PyOlsResult { inner: result })
+    }
+
+    // ========================================================================
+    // Phase 4: Data Manipulation Methods
+    // ========================================================================
+
+    /// Get information about all columns
+    pub fn column_info(&self) -> PyResult<Vec<PyColumnInfo>> {
+        let info = self.inner.column_info().map_err(mathemixx_error_to_pyerr)?;
+        Ok(info.into_iter().map(|i| i.into()).collect())
+    }
+
+    /// Check if a column is numeric
+    pub fn is_numeric_column(&self, column: &str) -> PyResult<bool> {
+        self.inner
+            .is_numeric_column(column)
+            .map_err(mathemixx_error_to_pyerr)
+    }
+
+    /// Select only numeric columns
+    pub fn select_numeric(&self) -> PyResult<PyDataSet> {
+        let ds = self
+            .inner
+            .select_numeric()
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(PyDataSet {
+            inner: Arc::new(ds),
+            path: None,
+        })
+    }
+
+    /// Rename a column
+    pub fn rename_column(&self, old_name: &str, new_name: &str) -> PyResult<PyDataSet> {
+        let ds = self
+            .inner
+            .rename_column(old_name, new_name)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(PyDataSet {
+            inner: Arc::new(ds),
+            path: None,
+        })
+    }
+
+    /// Drop columns
+    pub fn drop_columns(&self, columns: Vec<String>) -> PyResult<PyDataSet> {
+        let ds = self
+            .inner
+            .drop_columns(&columns)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(PyDataSet {
+            inner: Arc::new(ds),
+            path: None,
+        })
+    }
+
+    /// Add a transformed column
+    /// transform: "log", "log10", "square", "sqrt", "standardize", "center", "inverse"
+    pub fn add_column_transform(
+        &self,
+        source: &str,
+        target: &str,
+        transform: &str,
+    ) -> PyResult<PyDataSet> {
+        let trans = match transform.to_lowercase().as_str() {
+            "log" => Transform::Log,
+            "log10" => Transform::Log10,
+            "square" => Transform::Square,
+            "sqrt" | "squareroot" => Transform::SquareRoot,
+            "standardize" | "std" | "zscore" => Transform::Standardize,
+            "center" | "demean" => Transform::Center,
+            "inverse" | "reciprocal" => Transform::Inverse,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown transform: {}",
+                    transform
+                )))
+            }
+        };
+        let ds = self
+            .inner
+            .add_column_transform(source, target, trans)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(PyDataSet {
+            inner: Arc::new(ds),
+            path: None,
+        })
+    }
+
+    /// Filter rows by condition
+    /// condition: "gt", "lt", "eq", "ge", "le", "ne"
+    pub fn filter_rows(&self, column: &str, condition: &str, value: f64) -> PyResult<PyDataSet> {
+        let cond = match condition.to_lowercase().as_str() {
+            "gt" | ">" => FilterCondition::GreaterThan(value),
+            "lt" | "<" => FilterCondition::LessThan(value),
+            "eq" | "==" | "=" => FilterCondition::Equal(value),
+            "ge" | ">=" => FilterCondition::GreaterOrEqual(value),
+            "le" | "<=" => FilterCondition::LessOrEqual(value),
+            "ne" | "!=" => FilterCondition::NotEqual(value),
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown condition: {}",
+                    condition
+                )))
+            }
+        };
+        let ds = self
+            .inner
+            .filter_rows(column, cond)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(PyDataSet {
+            inner: Arc::new(ds),
+            path: None,
+        })
+    }
+
+    // ========================================================================
+    // Phase 5: Statistical Methods
+    // ========================================================================
+
+    /// Calculate correlation matrix
+    /// method: "pearson" or "spearman"
+    pub fn correlation(
+        &self,
+        columns: Option<Vec<String>>,
+        method: Option<&str>,
+    ) -> PyResult<PyCorrelationMatrix> {
+        let corr_method = match method.unwrap_or("pearson").to_lowercase().as_str() {
+            "pearson" => CorrelationMethod::Pearson,
+            "spearman" => CorrelationMethod::Spearman,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown correlation method: {}",
+                    other
+                )))
+            }
+        };
+        let corr = self
+            .inner
+            .correlation(columns, corr_method)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(corr.into())
+    }
+
+    /// Get enhanced summary statistics
+    pub fn enhanced_summary(
+        &self,
+        columns: Option<Vec<String>>,
+    ) -> PyResult<Vec<PyEnhancedSummary>> {
+        let summary = self
+            .inner
+            .enhanced_summary(columns)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(summary.into_iter().map(|s| s.into()).collect())
+    }
+
+    /// Get frequency table for a column
+    pub fn frequency_table(
+        &self,
+        column: &str,
+        limit: Option<usize>,
+    ) -> PyResult<PyFrequencyTable> {
+        let table = self
+            .inner
+            .frequency_table(column, limit)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(table.into())
+    }
+
+    // ========================================================================
+    // Phase 5: Hypothesis Testing
+    // ========================================================================
+
+    /// One-sample t-test
+    pub fn t_test_one_sample(
+        &self,
+        column: &str,
+        population_mean: f64,
+        alpha: Option<f64>,
+    ) -> PyResult<PyTTestResult> {
+        let a = alpha.unwrap_or(0.05);
+        let result = self
+            .inner
+            .t_test_one_sample(column, population_mean, a)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(result.into())
+    }
+
+    /// Two-sample t-test
+    pub fn t_test_two_sample(
+        &self,
+        col1: &str,
+        col2: &str,
+        alpha: Option<f64>,
+        equal_var: Option<bool>,
+    ) -> PyResult<PyTTestResult> {
+        let a = alpha.unwrap_or(0.05);
+        let eq_var = equal_var.unwrap_or(true);
+        let result = self
+            .inner
+            .t_test_two_sample(col1, col2, a, eq_var)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(result.into())
+    }
+
+    /// Paired t-test
+    pub fn t_test_paired(
+        &self,
+        col1: &str,
+        col2: &str,
+        alpha: Option<f64>,
+    ) -> PyResult<PyTTestResult> {
+        let a = alpha.unwrap_or(0.05);
+        let result = self
+            .inner
+            .t_test_paired(col1, col2, a)
+            .map_err(mathemixx_error_to_pyerr)?;
+        Ok(result.into())
     }
 }
 
@@ -368,6 +816,12 @@ fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_class::<PyOlsResult>()?;
     module.add_class::<PySummaryRow>()?;
     module.add_class::<PyCoefficientRow>()?;
+    module.add_class::<PyColumnInfo>()?;
+    module.add_class::<PyCorrelationMatrix>()?;
+    module.add_class::<PyEnhancedSummary>()?;
+    module.add_class::<PyFrequencyRow>()?;
+    module.add_class::<PyFrequencyTable>()?;
+    module.add_class::<PyTTestResult>()?;
     module.add_function(wrap_pyfunction!(load_csv, module)?)?;
     module.add_function(wrap_pyfunction!(summarize_dataset, module)?)?;
     module.add_function(wrap_pyfunction!(regress_dataset, module)?)?;
@@ -386,6 +840,10 @@ fn mathemixx_error_to_pyerr(value: MatheMixxError) -> PyErr {
             "Design matrix is rank deficient; consider dropping collinear variables",
         ),
         MatheMixxError::Unsupported(msg) => {
+            PyRuntimeError::new_err(format!("Unsupported operation: {msg}"))
+        }
+        MatheMixxError::InvalidInput(msg) => PyValueError::new_err(format!("Invalid input: {msg}")),
+        MatheMixxError::UnsupportedOperation(msg) => {
             PyRuntimeError::new_err(format!("Unsupported operation: {msg}"))
         }
         MatheMixxError::Io(err) => PyRuntimeError::new_err(err.to_string()),

@@ -26,6 +26,12 @@ pub enum MatheMixxError {
 
     #[error("Operation unsupported: {0}")]
     Unsupported(&'static str),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("Unsupported operation: {0}")]
+    UnsupportedOperation(String),
 }
 
 impl From<ndarray_linalg::error::LinalgError> for MatheMixxError {

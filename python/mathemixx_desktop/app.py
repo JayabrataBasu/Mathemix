@@ -12,7 +12,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import polars as pl
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Slot
 from PySide6.QtGui import QAction, QCloseEvent
@@ -36,7 +35,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mathemixx_core import DataSet
+# Import directly from the installed Rust bindings wheel
+import mathemixx_core as mx
 
 matplotlib.use("QtAgg")
 
@@ -132,7 +132,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("MatheMixX Desktop")
         self.resize(1200, 800)
-        self.dataset: DataSet | None = None
+        self.dataset: mx.DataSet | None = None
         self.dataset_path: Path | None = None
         self.dataframe: pd.DataFrame | None = None
         self.log_path = Path("logs") / f"session_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
         try:
-            dataset = DataSet.from_csv(file_path)
+            dataset = mx.DataSet.from_csv(file_path)
             self.dataset = dataset
             self.dataset_path = Path(file_path)
             self.file_label.setText(self.dataset_path.name)
@@ -245,7 +245,7 @@ class MainWindow(QMainWindow):
             self.update_data_preview(self.dataframe)
             self.populate_variables(self.dataframe.columns.tolist())
             self.log_command(f'use "{file_path}"')
-            self.command_view.appendPlainText(f"Loaded dataset: {file_path}")
+            self.command_view.append(f"Loaded dataset: {file_path}")
         except Exception as exc:  # pylint: disable=broad-except
             logging.exception("Failed to load CSV", exc_info=exc)
             QMessageBox.critical(self, "Error", f"Failed to load CSV: {exc}")
@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
         if self.dataframe is not None and independents:
             x = self.dataframe[independents[0]]
             y = self.dataframe[dependent]
-            self.plot_canvas.plot_scatter_with_fit(x, y, result.coefficients())
+            self.plot_canvas.plot_scatter_with_fit(x, y, result.coefficients)
 
     @Slot()
     def handle_command(self) -> None:
@@ -345,7 +345,7 @@ class MainWindow(QMainWindow):
         if not command:
             return
         self.command_input.clear()
-        self.command_view.appendPlainText(f". {command}")
+        self.command_view.append(f". {command}")
         if command.startswith("summarize"):
             self.handle_summarize()
         elif command.startswith("regress"):
