@@ -444,6 +444,247 @@ def plot_violin(dataset: mx.DataSet, column: str, ax: Optional[plt.Axes] = None,
 
 
 # ============================================================================
+# Phase 7: Time Series Plots
+# ============================================================================
+
+def plot_acf(
+    acf_values: List[float],
+    lags: Optional[List[int]] = None,
+    ax: Optional[plt.Axes] = None,
+    title: str = "Autocorrelation Function (ACF)",
+    **kwargs
+) -> plt.Axes:
+    """
+    Plot Autocorrelation Function (ACF).
+    
+    Args:
+        acf_values: ACF values from timeseries.acf()
+        lags: Lag values (if None, uses 0 to len(acf_values)-1)
+        ax: Matplotlib axes (if None, creates new figure)
+        title: Plot title
+        **kwargs: Additional arguments for matplotlib
+        
+    Returns:
+        Matplotlib axes object
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    
+    if lags is None:
+        lags = list(range(len(acf_values)))
+    
+    # Plot stems
+    ax.stem(lags, acf_values, linefmt='C0-', markerfmt='C0o', basefmt='k-', **kwargs)
+    
+    # Add confidence interval bands (95%)
+    n = len(acf_values)
+    conf_int = 1.96 / np.sqrt(n)  # Approximate 95% CI
+    ax.axhline(y=conf_int, color='r', linestyle='--', alpha=0.5, label='95% CI')
+    ax.axhline(y=-conf_int, color='r', linestyle='--', alpha=0.5)
+    ax.axhline(y=0, color='k', linestyle='-', linewidth=0.5)
+    
+    ax.set_xlabel('Lag', fontsize=12)
+    ax.set_ylabel('ACF', fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    return ax
+
+
+def plot_pacf(
+    pacf_values: List[float],
+    lags: Optional[List[int]] = None,
+    ax: Optional[plt.Axes] = None,
+    title: str = "Partial Autocorrelation Function (PACF)",
+    **kwargs
+) -> plt.Axes:
+    """
+    Plot Partial Autocorrelation Function (PACF).
+    
+    Args:
+        pacf_values: PACF values from timeseries.pacf()
+        lags: Lag values (if None, uses 0 to len(pacf_values)-1)
+        ax: Matplotlib axes (if None, creates new figure)
+        title: Plot title
+        **kwargs: Additional arguments for matplotlib
+        
+    Returns:
+        Matplotlib axes object
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    
+    if lags is None:
+        lags = list(range(len(pacf_values)))
+    
+    # Plot stems
+    ax.stem(lags, pacf_values, linefmt='C1-', markerfmt='C1o', basefmt='k-', **kwargs)
+    
+    # Add confidence interval bands (95%)
+    n = len(pacf_values)
+    conf_int = 1.96 / np.sqrt(n)
+    ax.axhline(y=conf_int, color='r', linestyle='--', alpha=0.5, label='95% CI')
+    ax.axhline(y=-conf_int, color='r', linestyle='--', alpha=0.5)
+    ax.axhline(y=0, color='k', linestyle='-', linewidth=0.5)
+    
+    ax.set_xlabel('Lag', fontsize=12)
+    ax.set_ylabel('PACF', fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    return ax
+
+
+def plot_decomposition(
+    decomp_result,
+    figsize: Tuple[int, int] = (12, 10),
+    **kwargs
+) -> plt.Figure:
+    """
+    Plot seasonal decomposition results in a 4-panel layout.
+    
+    Args:
+        decomp_result: DecompositionResult from timeseries.seasonal_decompose()
+        figsize: Figure size
+        **kwargs: Additional arguments for matplotlib
+        
+    Returns:
+        Matplotlib figure object
+    """
+    fig, axes = plt.subplots(4, 1, figsize=figsize, sharex=True)
+    
+    time = np.arange(len(decomp_result.observed))
+    
+    # Observed
+    axes[0].plot(time, decomp_result.observed, label='Observed', color='C0', **kwargs)
+    axes[0].set_ylabel('Observed', fontsize=11)
+    axes[0].set_title('Time Series Decomposition', fontsize=14, fontweight='bold')
+    axes[0].legend(loc='upper right')
+    axes[0].grid(True, alpha=0.3)
+    
+    # Trend
+    axes[1].plot(time, decomp_result.trend, label='Trend', color='C1', **kwargs)
+    axes[1].set_ylabel('Trend', fontsize=11)
+    axes[1].legend(loc='upper right')
+    axes[1].grid(True, alpha=0.3)
+    
+    # Seasonal
+    axes[2].plot(time, decomp_result.seasonal, label='Seasonal', color='C2', **kwargs)
+    axes[2].set_ylabel('Seasonal', fontsize=11)
+    axes[2].legend(loc='upper right')
+    axes[2].grid(True, alpha=0.3)
+    
+    # Residual
+    axes[3].plot(time, decomp_result.residual, label='Residual', color='C3', **kwargs)
+    axes[3].set_ylabel('Residual', fontsize=11)
+    axes[3].set_xlabel('Time', fontsize=12)
+    axes[3].legend(loc='upper right')
+    axes[3].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def plot_forecast(
+    observed: List[float],
+    forecast_result,
+    n_history: Optional[int] = None,
+    figsize: Tuple[int, int] = (12, 6),
+    **kwargs
+) -> plt.Axes:
+    """
+    Plot time series forecast with confidence intervals.
+    
+    Args:
+        observed: Historical observed data
+        forecast_result: ForecastResult from forecasting methods
+        n_history: Number of historical points to show (if None, shows all)
+        figsize: Figure size
+        **kwargs: Additional arguments for matplotlib
+        
+    Returns:
+        Matplotlib axes object
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Historical data
+    if n_history is not None:
+        observed = observed[-n_history:]
+    
+    n_obs = len(observed)
+    n_forecast = len(forecast_result.forecasts)
+    
+    time_obs = np.arange(n_obs)
+    time_forecast = np.arange(n_obs, n_obs + n_forecast)
+    
+    # Plot observed data
+    ax.plot(time_obs, observed, label='Observed', color='C0', linewidth=2, **kwargs)
+    
+    # Plot forecast
+    ax.plot(time_forecast, forecast_result.forecasts, 
+            label='Forecast', color='C1', linewidth=2, linestyle='--')
+    
+    # Plot confidence interval
+    ax.fill_between(
+        time_forecast,
+        forecast_result.lower_bound,
+        forecast_result.upper_bound,
+        alpha=0.3,
+        color='C1',
+        label=f'{int(forecast_result.confidence_level*100)}% CI'
+    )
+    
+    # Add vertical line at forecast start
+    ax.axvline(x=n_obs-0.5, color='k', linestyle=':', alpha=0.5)
+    
+    ax.set_xlabel('Time', fontsize=12)
+    ax.set_ylabel('Value', fontsize=12)
+    ax.set_title('Time Series Forecast', fontsize=14, fontweight='bold')
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.3)
+    
+    return ax
+
+
+def plot_acf_pacf(
+    data: List[float],
+    nlags: int = 20,
+    figsize: Tuple[int, int] = (12, 5),
+    **kwargs
+) -> plt.Figure:
+    """
+    Plot ACF and PACF side by side.
+    
+    Args:
+        data: Time series data
+        nlags: Number of lags to plot
+        figsize: Figure size
+        **kwargs: Additional arguments for matplotlib
+        
+    Returns:
+        Matplotlib figure object
+    """
+    from python.timeseries import acf, pacf
+    
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    
+    # Calculate ACF and PACF
+    acf_vals = acf(data, nlags)
+    pacf_vals = pacf(data, nlags)
+    
+    # Plot ACF
+    plot_acf(acf_vals, ax=axes[0], **kwargs)
+    
+    # Plot PACF
+    plot_pacf(pacf_vals, ax=axes[1], **kwargs)
+    
+    plt.tight_layout()
+    return fig
+
+
+# ============================================================================
 # Example Usage
 # ============================================================================
 
@@ -451,3 +692,4 @@ if __name__ == "__main__":
     # This section demonstrates basic usage
     print("Mathemix Plotting Module")
     print("Import this module and use the plotting functions with mathemixx_core data structures.")
+

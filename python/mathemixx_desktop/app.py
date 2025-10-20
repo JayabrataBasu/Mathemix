@@ -39,11 +39,12 @@ from PySide6.QtWidgets import (
 # Import directly from the installed Rust bindings wheel
 import mathemixx_core as mx
 
-# Import Phase 6 visualization module
+# Import Phase 6 visualization module and Phase 7 time series
 import sys
 from pathlib import Path as PathLib
 sys.path.insert(0, str(PathLib(__file__).parent.parent))
 import plots
+from mathemixx_desktop.timeseries_widget import TimeSeriesWidget
 
 matplotlib.use("QtAgg")
 
@@ -326,6 +327,13 @@ class MainWindow(QMainWindow):
         plot_layout.addWidget(self.plot_canvas)
         right_panel.addTab(plot_container, "Plots")
 
+        # Phase 7: Time Series Analysis tab
+        self.timeseries_widget = TimeSeriesWidget(
+            plot_canvas=self.plot_canvas,
+            log_callback=self.log_command
+        )
+        right_panel.addTab(self.timeseries_widget, "Time Series")
+
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(1, 3)
 
@@ -370,6 +378,10 @@ class MainWindow(QMainWindow):
             self.dataframe = pd.read_csv(self.dataset_path)
             self.update_data_preview(self.dataframe)
             self.populate_variables(self.dataframe.columns.tolist())
+            
+            # Update time series widget with new dataset
+            self.timeseries_widget.set_dataset(self.dataset, self.dataframe)
+            
             self.log_command(f'use "{file_path}"')
             self.command_view.append(f"Loaded dataset: {file_path}")
         except Exception as exc:  # pylint: disable=broad-except

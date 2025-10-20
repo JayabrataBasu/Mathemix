@@ -4,11 +4,57 @@ use std::io::Write;
 use std::sync::Arc;
 
 use ::mathemixx_core::{
-    regress, summarize_numeric, BoxPlotData, ColumnInfo, ColumnType, CorrelationMatrix,
-    CorrelationMethod, DataSet, EnhancedSummary, FilterCondition, FrequencyRow, FrequencyTable,
-    HeatmapData, HistogramData, MatheMixxError, OlsOptions, OlsResult, PairPlotData, QQPlotData,
-    ResidualFittedData, ResidualHistogramData, ResidualsLeverageData, ScaleLocationData,
-    TTestResult, Transform, ViolinPlotData,
+    // Phase 7: Time Series
+    acf,
+    adf_test,
+    diff,
+    ema,
+    holt_linear,
+    holt_winters,
+    kpss_test,
+    lag,
+    ljung_box_test,
+    pacf,
+    regress,
+    rolling_max,
+    rolling_mean,
+    rolling_min,
+    rolling_std,
+    seasonal_decompose,
+    simple_exp_smoothing,
+    sma,
+    summarize_numeric,
+    wma,
+    ADFResult,
+    BoxPlotData,
+    ColumnInfo,
+    ColumnType,
+    CorrelationMatrix,
+    CorrelationMethod,
+    DataSet,
+    DecompType,
+    DecompositionResult,
+    EnhancedSummary,
+    FilterCondition,
+    ForecastResult,
+    FrequencyRow,
+    FrequencyTable,
+    HeatmapData,
+    HistogramData,
+    KPSSResult,
+    MatheMixxError,
+    OlsOptions,
+    OlsResult,
+    PairPlotData,
+    QQPlotData,
+    ResidualFittedData,
+    ResidualHistogramData,
+    ResidualsLeverageData,
+    ScaleLocationData,
+    TTestResult,
+    TimeSeries,
+    Transform,
+    ViolinPlotData,
 };
 use polars::io::SerWriter;
 use polars::prelude::CsvWriter;
@@ -1136,6 +1182,303 @@ pub fn regress_dataset(
     dataset.regress_ols(dependent, independents, robust)
 }
 
+// ============================================================================
+// Phase 7: Time Series Bindings
+// ============================================================================
+
+/// Python wrapper for time series operations
+#[pyfunction]
+#[pyo3(signature = (data, periods=1))]
+pub fn py_lag(data: Vec<f64>, periods: usize) -> PyResult<Vec<f64>> {
+    Ok(lag(&data, periods))
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, periods=1))]
+pub fn py_diff(data: Vec<f64>, periods: usize) -> PyResult<Vec<f64>> {
+    Ok(diff(&data, periods))
+}
+
+#[pyfunction]
+pub fn py_sma(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(sma(&data, window))
+}
+
+#[pyfunction]
+pub fn py_ema(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(ema(&data, window))
+}
+
+#[pyfunction]
+pub fn py_wma(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(wma(&data, window))
+}
+
+#[pyfunction]
+pub fn py_rolling_mean(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(rolling_mean(&data, window))
+}
+
+#[pyfunction]
+pub fn py_rolling_std(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(rolling_std(&data, window))
+}
+
+#[pyfunction]
+pub fn py_rolling_min(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(rolling_min(&data, window))
+}
+
+#[pyfunction]
+pub fn py_rolling_max(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    Ok(rolling_max(&data, window))
+}
+
+#[pyfunction]
+pub fn py_acf(data: Vec<f64>, nlags: usize) -> PyResult<Vec<f64>> {
+    Ok(acf(&data, nlags))
+}
+
+#[pyfunction]
+pub fn py_pacf(data: Vec<f64>, nlags: usize) -> PyResult<Vec<f64>> {
+    Ok(pacf(&data, nlags))
+}
+
+#[pyfunction]
+pub fn py_ljung_box_test(data: Vec<f64>, lags: usize) -> PyResult<(f64, f64)> {
+    Ok(ljung_box_test(&data, lags))
+}
+
+#[pyclass(name = "ADFResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyADFResult {
+    #[pyo3(get)]
+    pub test_statistic: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub lags_used: usize,
+    #[pyo3(get)]
+    pub n_obs: usize,
+    #[pyo3(get)]
+    pub is_stationary: bool,
+}
+
+#[pymethods]
+impl PyADFResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "ADFResult(statistic={:.4}, p_value={:.4}, stationary={})",
+            self.test_statistic, self.p_value, self.is_stationary
+        )
+    }
+
+    #[getter]
+    fn critical_values(&self) -> (f64, f64, f64) {
+        (-3.43, -2.86, -2.57) // 1%, 5%, 10%
+    }
+}
+
+#[pyclass(name = "KPSSResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyKPSSResult {
+    #[pyo3(get)]
+    pub test_statistic: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub lags_used: usize,
+    #[pyo3(get)]
+    pub is_stationary: bool,
+}
+
+#[pymethods]
+impl PyKPSSResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "KPSSResult(statistic={:.4}, p_value={:.4}, stationary={})",
+            self.test_statistic, self.p_value, self.is_stationary
+        )
+    }
+
+    #[getter]
+    fn critical_values(&self) -> (f64, f64, f64) {
+        (0.739, 0.463, 0.347) // 1%, 5%, 10%
+    }
+}
+
+#[pyfunction]
+pub fn py_adf_test(data: Vec<f64>, max_lags: Option<usize>) -> PyResult<PyADFResult> {
+    let result = adf_test(&data, max_lags);
+    Ok(PyADFResult {
+        test_statistic: result.test_statistic,
+        p_value: result.p_value,
+        lags_used: result.lags_used,
+        n_obs: result.n_obs,
+        is_stationary: result.is_stationary,
+    })
+}
+
+#[pyfunction]
+pub fn py_kpss_test(data: Vec<f64>, lags: Option<usize>) -> PyResult<PyKPSSResult> {
+    let result = kpss_test(&data, lags);
+    Ok(PyKPSSResult {
+        test_statistic: result.test_statistic,
+        p_value: result.p_value,
+        lags_used: result.lags_used,
+        is_stationary: result.is_stationary,
+    })
+}
+
+#[pyclass(name = "DecompositionResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyDecompositionResult {
+    #[pyo3(get)]
+    pub trend: Vec<f64>,
+    #[pyo3(get)]
+    pub seasonal: Vec<f64>,
+    #[pyo3(get)]
+    pub residual: Vec<f64>,
+    #[pyo3(get)]
+    pub observed: Vec<f64>,
+}
+
+#[pymethods]
+impl PyDecompositionResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "DecompositionResult(n_obs={}, trend_len={}, seasonal_len={}, residual_len={})",
+            self.observed.len(),
+            self.trend.len(),
+            self.seasonal.len(),
+            self.residual.len()
+        )
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, period, model="additive"))]
+pub fn py_seasonal_decompose(
+    data: Vec<f64>,
+    period: usize,
+    model: &str,
+) -> PyResult<PyDecompositionResult> {
+    let decomp_type = match model.to_lowercase().as_str() {
+        "additive" | "add" => DecompType::Additive,
+        "multiplicative" | "mult" => DecompType::Multiplicative,
+        _ => {
+            return Err(PyValueError::new_err(
+                "model must be 'additive' or 'multiplicative'",
+            ))
+        }
+    };
+
+    match seasonal_decompose(&data, period, decomp_type) {
+        Ok(result) => Ok(PyDecompositionResult {
+            trend: result.trend,
+            seasonal: result.seasonal,
+            residual: result.residual,
+            observed: result.observed,
+        }),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
+#[pyclass(name = "ForecastResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyForecastResult {
+    #[pyo3(get)]
+    pub forecasts: Vec<f64>,
+    #[pyo3(get)]
+    pub lower_bound: Vec<f64>,
+    #[pyo3(get)]
+    pub upper_bound: Vec<f64>,
+    #[pyo3(get)]
+    pub confidence_level: f64,
+}
+
+#[pymethods]
+impl PyForecastResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "ForecastResult(horizon={}, confidence={:.0}%)",
+            self.forecasts.len(),
+            self.confidence_level * 100.0
+        )
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, alpha=0.3, horizon=12, confidence=0.95))]
+pub fn py_simple_exp_smoothing(
+    data: Vec<f64>,
+    alpha: f64,
+    horizon: usize,
+    confidence: f64,
+) -> PyResult<PyForecastResult> {
+    match simple_exp_smoothing(&data, alpha, horizon, confidence) {
+        Ok(result) => Ok(PyForecastResult {
+            forecasts: result.forecasts,
+            lower_bound: result.lower_bound,
+            upper_bound: result.upper_bound,
+            confidence_level: result.confidence_level,
+        }),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, alpha=0.3, beta=0.1, horizon=12, confidence=0.95))]
+pub fn py_holt_linear(
+    data: Vec<f64>,
+    alpha: f64,
+    beta: f64,
+    horizon: usize,
+    confidence: f64,
+) -> PyResult<PyForecastResult> {
+    match holt_linear(&data, alpha, beta, horizon, confidence) {
+        Ok(result) => Ok(PyForecastResult {
+            forecasts: result.forecasts,
+            lower_bound: result.lower_bound,
+            upper_bound: result.upper_bound,
+            confidence_level: result.confidence_level,
+        }),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (data, alpha=0.3, beta=0.1, gamma=0.2, period=12, horizon=12, seasonal_type="additive", confidence=0.95))]
+pub fn py_holt_winters(
+    data: Vec<f64>,
+    alpha: f64,
+    beta: f64,
+    gamma: f64,
+    period: usize,
+    horizon: usize,
+    seasonal_type: &str,
+    confidence: f64,
+) -> PyResult<PyForecastResult> {
+    match holt_winters(
+        &data,
+        alpha,
+        beta,
+        gamma,
+        period,
+        horizon,
+        seasonal_type,
+        confidence,
+    ) {
+        Ok(result) => Ok(PyForecastResult {
+            forecasts: result.forecasts,
+            lower_bound: result.lower_bound,
+            upper_bound: result.upper_bound,
+            confidence_level: result.confidence_level,
+        }),
+        Err(e) => Err(PyValueError::new_err(e)),
+    }
+}
+
 #[pymodule]
 fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_class::<PyDataSet>()?;
@@ -1162,6 +1505,31 @@ fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(load_csv, module)?)?;
     module.add_function(wrap_pyfunction!(summarize_dataset, module)?)?;
     module.add_function(wrap_pyfunction!(regress_dataset, module)?)?;
+
+    // Phase 7: Time Series functions and classes
+    module.add_class::<PyADFResult>()?;
+    module.add_class::<PyKPSSResult>()?;
+    module.add_class::<PyDecompositionResult>()?;
+    module.add_class::<PyForecastResult>()?;
+    module.add_function(wrap_pyfunction!(py_lag, module)?)?;
+    module.add_function(wrap_pyfunction!(py_diff, module)?)?;
+    module.add_function(wrap_pyfunction!(py_sma, module)?)?;
+    module.add_function(wrap_pyfunction!(py_ema, module)?)?;
+    module.add_function(wrap_pyfunction!(py_wma, module)?)?;
+    module.add_function(wrap_pyfunction!(py_rolling_mean, module)?)?;
+    module.add_function(wrap_pyfunction!(py_rolling_std, module)?)?;
+    module.add_function(wrap_pyfunction!(py_rolling_min, module)?)?;
+    module.add_function(wrap_pyfunction!(py_rolling_max, module)?)?;
+    module.add_function(wrap_pyfunction!(py_acf, module)?)?;
+    module.add_function(wrap_pyfunction!(py_pacf, module)?)?;
+    module.add_function(wrap_pyfunction!(py_ljung_box_test, module)?)?;
+    module.add_function(wrap_pyfunction!(py_adf_test, module)?)?;
+    module.add_function(wrap_pyfunction!(py_kpss_test, module)?)?;
+    module.add_function(wrap_pyfunction!(py_seasonal_decompose, module)?)?;
+    module.add_function(wrap_pyfunction!(py_simple_exp_smoothing, module)?)?;
+    module.add_function(wrap_pyfunction!(py_holt_linear, module)?)?;
+    module.add_function(wrap_pyfunction!(py_holt_winters, module)?)?;
+
     Ok(())
 }
 

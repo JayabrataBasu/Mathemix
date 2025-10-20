@@ -23,6 +23,7 @@ dependencies = [
 [tool.maturin]
 python-source = "python"
 module-name = "mathemixx_core"
+manifest-path = "bindings/Cargo.toml"
 features = []
 strip = true
 profile = "release"
