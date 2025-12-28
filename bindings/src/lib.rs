@@ -57,7 +57,6 @@ use ::mathemixx_core::{
     ResidualsLeverageData,
     ScaleLocationData,
     TTestResult,
-    TimeSeries,
     Transform,
     ViolinPlotData,
 };
@@ -1273,12 +1272,7 @@ pub fn py_pacf(data: Vec<f64>, nlags: usize) -> PyResult<Vec<f64>> {
 #[pyfunction]
 pub fn py_ljung_box_test(data: Vec<f64>, lags: usize) -> PyResult<PyLjungBoxResult> {
     match ljung_box_test(&data, lags) {
-        Ok(result) => Ok(PyLjungBoxResult {
-            statistic: result.statistic,
-            p_value: result.p_value,
-            lags: result.lags,
-            degrees_of_freedom: result.degrees_of_freedom,
-        }),
+        Ok(result) => Ok(result.into()),
         Err(e) => Err(mathemixx_error_to_pyerr(e)),
     }
 }
@@ -1310,6 +1304,19 @@ impl PyADFResult {
     }
 }
 
+impl From<ADFResult> for PyADFResult {
+    fn from(result: ADFResult) -> Self {
+        PyADFResult {
+            test_statistic: result.test_statistic,
+            p_value: result.p_value,
+            lags_used: result.lags_used,
+            n_obs: result.n_obs,
+            critical_values: result.critical_values,
+            is_stationary: result.is_stationary,
+        }
+    }
+}
+
 #[pyclass(name = "KPSSResult", module = "mathemixx_core")]
 #[derive(Clone)]
 pub struct PyKPSSResult {
@@ -1332,6 +1339,18 @@ impl PyKPSSResult {
             "KPSSResult(statistic={:.4}, p_value={:.4}, stationary={})",
             self.test_statistic, self.p_value, self.is_stationary
         )
+    }
+}
+
+impl From<KPSSResult> for PyKPSSResult {
+    fn from(result: KPSSResult) -> Self {
+        PyKPSSResult {
+            test_statistic: result.test_statistic,
+            p_value: result.p_value,
+            lags_used: result.lags_used,
+            critical_values: result.critical_values,
+            is_stationary: result.is_stationary,
+        }
     }
 }
 
@@ -1358,29 +1377,27 @@ impl PyLjungBoxResult {
     }
 }
 
+impl From<LjungBoxResult> for PyLjungBoxResult {
+    fn from(result: LjungBoxResult) -> Self {
+        PyLjungBoxResult {
+            statistic: result.statistic,
+            p_value: result.p_value,
+            lags: result.lags,
+            degrees_of_freedom: result.degrees_of_freedom,
+        }
+    }
+}
+
 #[pyfunction]
 pub fn py_adf_test(data: Vec<f64>, max_lags: Option<usize>) -> PyResult<PyADFResult> {
     let result = adf_test(&data, max_lags);
-    Ok(PyADFResult {
-        test_statistic: result.test_statistic,
-        p_value: result.p_value,
-        lags_used: result.lags_used,
-        n_obs: result.n_obs,
-        critical_values: result.critical_values,
-        is_stationary: result.is_stationary,
-    })
+    Ok(result.into())
 }
 
 #[pyfunction]
 pub fn py_kpss_test(data: Vec<f64>, nlags: Option<usize>) -> PyResult<PyKPSSResult> {
     let result = kpss_test(&data, nlags);
-    Ok(PyKPSSResult {
-        test_statistic: result.test_statistic,
-        p_value: result.p_value,
-        lags_used: result.lags_used,
-        critical_values: result.critical_values,
-        is_stationary: result.is_stationary,
-    })
+    Ok(result.into())
 }
 
 #[pyclass(name = "DecompositionResult", module = "mathemixx_core")]
@@ -1409,6 +1426,17 @@ impl PyDecompositionResult {
     }
 }
 
+impl From<DecompositionResult> for PyDecompositionResult {
+    fn from(result: DecompositionResult) -> Self {
+        PyDecompositionResult {
+            trend: result.trend,
+            seasonal: result.seasonal,
+            residual: result.residual,
+            observed: result.observed,
+        }
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature = (data, period, model="additive"))]
 pub fn py_seasonal_decompose(
@@ -1427,12 +1455,7 @@ pub fn py_seasonal_decompose(
     };
 
     match seasonal_decompose(&data, period, decomp_type) {
-        Ok(result) => Ok(PyDecompositionResult {
-            trend: result.trend,
-            seasonal: result.seasonal,
-            residual: result.residual,
-            observed: result.observed,
-        }),
+        Ok(result) => Ok(result.into()),
         Err(e) => Err(PyValueError::new_err(e)),
     }
 }
@@ -1461,6 +1484,17 @@ impl PyForecastResult {
     }
 }
 
+impl From<ForecastResult> for PyForecastResult {
+    fn from(result: ForecastResult) -> Self {
+        PyForecastResult {
+            forecasts: result.forecasts,
+            lower_bound: result.lower_bound,
+            upper_bound: result.upper_bound,
+            confidence_level: result.confidence_level,
+        }
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature = (data, alpha=0.3, horizon=12, confidence=0.95))]
 pub fn py_simple_exp_smoothing(
@@ -1470,12 +1504,7 @@ pub fn py_simple_exp_smoothing(
     confidence: f64,
 ) -> PyResult<PyForecastResult> {
     match simple_exp_smoothing(&data, alpha, horizon, confidence) {
-        Ok(result) => Ok(PyForecastResult {
-            forecasts: result.forecasts,
-            lower_bound: result.lower_bound,
-            upper_bound: result.upper_bound,
-            confidence_level: result.confidence_level,
-        }),
+        Ok(result) => Ok(result.into()),
         Err(e) => Err(PyValueError::new_err(e)),
     }
 }
@@ -1490,12 +1519,7 @@ pub fn py_holt_linear(
     confidence: f64,
 ) -> PyResult<PyForecastResult> {
     match holt_linear(&data, alpha, beta, horizon, confidence) {
-        Ok(result) => Ok(PyForecastResult {
-            forecasts: result.forecasts,
-            lower_bound: result.lower_bound,
-            upper_bound: result.upper_bound,
-            confidence_level: result.confidence_level,
-        }),
+        Ok(result) => Ok(result.into()),
         Err(e) => Err(PyValueError::new_err(e)),
     }
 }
@@ -1522,12 +1546,7 @@ pub fn py_holt_winters(
         seasonal_type,
         confidence,
     ) {
-        Ok(result) => Ok(PyForecastResult {
-            forecasts: result.forecasts,
-            lower_bound: result.lower_bound,
-            upper_bound: result.upper_bound,
-            confidence_level: result.confidence_level,
-        }),
+        Ok(result) => Ok(result.into()),
         Err(e) => Err(PyValueError::new_err(e)),
     }
 }

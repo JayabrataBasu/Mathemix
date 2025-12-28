@@ -5,11 +5,11 @@ use crate::errors::MatheMixxError;
 /// GARCH model parameters
 #[derive(Debug, Clone)]
 pub struct GarchModel {
-    pub p: usize,  // ARCH order
-    pub q: usize,  // GARCH order
-    pub omega: f64, // Constant term
-    pub alpha: Vec<f64>, // ARCH coefficients
-    pub beta: Vec<f64>,  // GARCH coefficients
+    pub p: usize,            // ARCH order
+    pub q: usize,            // GARCH order
+    pub omega: f64,          // Constant term
+    pub alpha: Vec<f64>,     // ARCH coefficients
+    pub beta: Vec<f64>,      // GARCH coefficients
     pub residuals: Vec<f64>, // Standardized residuals
     pub variances: Vec<f64>, // Conditional variances
 }
@@ -46,7 +46,11 @@ impl GarchModel {
     }
 
     /// Forecast conditional variances
-    pub fn forecast_volatility(&self, horizon: usize, confidence: f64) -> Result<GarchForecast, MatheMixxError> {
+    pub fn forecast_volatility(
+        &self,
+        horizon: usize,
+        confidence: f64,
+    ) -> Result<GarchForecast, MatheMixxError> {
         let mut variances = Vec::with_capacity(horizon);
         let mut lower_bound = Vec::with_capacity(horizon);
         let mut upper_bound = Vec::with_capacity(horizon);
@@ -77,7 +81,11 @@ impl GarchModel {
 }
 
 /// Estimate GARCH(p,q) parameters (placeholder implementation)
-fn estimate_garch(returns: &[f64], p: usize, q: usize) -> Result<(f64, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>), MatheMixxError> {
+fn estimate_garch(
+    returns: &[f64],
+    p: usize,
+    q: usize,
+) -> Result<(f64, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>), MatheMixxError> {
     // Placeholder: return dummy values
     let omega = 0.01;
     let alpha = vec![0.1; p];

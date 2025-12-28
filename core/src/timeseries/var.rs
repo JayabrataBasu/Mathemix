@@ -1,7 +1,7 @@
 // VAR (Vector Autoregression) implementation
 
-use ndarray::{Array2, Array1};
 use crate::errors::MatheMixxError;
+use ndarray::{Array1, Array2};
 
 /// VAR model parameters
 #[derive(Debug, Clone)]
@@ -35,7 +35,9 @@ impl VarModel {
         // Check all series have same length
         for series in data {
             if series.len() != n_obs {
-                return Err(MatheMixxError::InvalidInput("All time series must have the same length".to_string()));
+                return Err(MatheMixxError::InvalidInput(
+                    "All time series must have the same length".to_string(),
+                ));
             }
         }
 
@@ -77,7 +79,10 @@ impl VarModel {
 }
 
 /// Estimate VAR parameters (simplified OLS)
-fn estimate_var(data: &[Vec<f64>], lag_order: usize) -> Result<(Vec<Array2<f64>>, Array1<f64>, Array2<f64>), MatheMixxError> {
+fn estimate_var(
+    data: &[Vec<f64>],
+    lag_order: usize,
+) -> Result<(Vec<Array2<f64>>, Array1<f64>, Array2<f64>), MatheMixxError> {
     // Placeholder: return dummy values
     let n_vars = data.len();
     let coefficients = vec![Array2::eye(n_vars); lag_order];
