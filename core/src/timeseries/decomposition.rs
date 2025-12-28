@@ -95,7 +95,7 @@ pub fn seasonal_decompose(
 fn calculate_trend(data: &[f64], period: usize) -> Vec<f64> {
     if period % 2 == 0 {
         // Even period: use 2x(period) moving average
-        let ma1 = sma(data, period);
+        let ma1 = sma(data, period).unwrap(); // Should not fail with valid inputs
         // Center it with a 2-period moving average
         let mut trend = vec![f64::NAN; data.len()];
         for i in 1..ma1.len() {
@@ -106,7 +106,7 @@ fn calculate_trend(data: &[f64], period: usize) -> Vec<f64> {
         trend
     } else {
         // Odd period: simple centered moving average
-        sma(data, period)
+        sma(data, period).unwrap() // Should not fail with valid inputs
     }
 }
 

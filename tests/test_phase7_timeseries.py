@@ -60,7 +60,8 @@ class TestTimeSeriesOperations:
         # First difference
         diff_data = diff(data, 1)
         assert len(diff_data) == 4
-        assert all(abs(d - 2.0) < 1e-10 for d in diff_data[:2])  # First two diffs
+        assert abs(diff_data[0] - 2.0) < 1e-10  # First diff: 3-1 = 2
+        assert abs(diff_data[1] - 3.0) < 1e-10  # Second diff: 6-3 = 3
         
         # Second difference
         diff2_data = diff(data, 2)
@@ -154,9 +155,9 @@ class TestAutocorrelation:
         white_noise = np.random.randn(100).tolist()
         
         result = ljung_box_test(white_noise, 10)
-        assert result['statistic'] >= 0
-        assert 0 <= result['p_value'] <= 1
-        assert result['degrees_of_freedom'] == 10
+        assert result.statistic >= 0
+        assert 0 <= result.p_value <= 1
+        assert result.degrees_of_freedom == 10
 
 
 class TestStationarityTests:
@@ -190,7 +191,7 @@ class TestStationarityTests:
         np.random.seed(42)
         stationary_data = np.random.randn(100).tolist()
         
-        result = kpss_test(stationary_data, nlags=10)
+        result = kpss_test(stationary_data, lags=10)
         assert hasattr(result, 'test_statistic')
         assert hasattr(result, 'p_value')
         assert hasattr(result, 'is_stationary')
@@ -204,7 +205,7 @@ class TestStationarityTests:
         # Linear trend
         trend_data = [float(i) + np.random.randn() * 0.1 for i in range(100)]
         
-        result = kpss_test(trend_data, nlags=10)
+        result = kpss_test(trend_data, lags=10)
         # Should detect non-stationarity
         assert result.is_stationary is False
 
@@ -370,7 +371,7 @@ class TestTimeSeriesAnalyzer:
         assert len(pacf_vals) == 11
         
         lb_result = analyzer.ljung_box_test(10)
-        assert 'statistic' in lb_result
+        assert hasattr(lb_result, 'statistic')
     
     def test_analyzer_stationarity(self):
         """Test analyzer stationarity tests."""

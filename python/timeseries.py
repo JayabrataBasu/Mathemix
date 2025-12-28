@@ -39,6 +39,10 @@ class TimeSeriesAnalyzer:
         """Initialize with time series data."""
         self.data = data
     
+    def __len__(self) -> int:
+        """Return the length of the time series."""
+        return len(self.data)
+    
     # Basic Operations
     def lag(self, periods: int = 1) -> List[float]:
         """Lag the series by specified periods."""

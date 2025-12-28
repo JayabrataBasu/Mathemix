@@ -20,7 +20,7 @@ pub use summary::summarize_numeric;
 pub use timeseries::{
     acf, adf_test, diff, ema, holt_linear, holt_winters, kpss_test, lag, ljung_box_test, pacf,
     rolling_max, rolling_mean, rolling_min, rolling_std, seasonal_decompose, simple_exp_smoothing,
-    sma, wma, ADFResult, DecompType, DecompositionResult, ForecastResult, KPSSResult, TimeSeries,
+    sma, wma, ADFResult, DecompType, DecompositionResult, ForecastResult, KPSSResult, LjungBoxResult, TimeSeries,
 };
 pub use visualization::{
     BoxPlotData, HeatmapData, HistogramData, PairPlotData, QQPlotData, ResidualFittedData,

@@ -14,7 +14,7 @@ pub mod structures;
 pub mod var;
 
 pub use arima::ArimaModel;
-pub use autocorr::{acf, ljung_box_test, pacf};
+pub use autocorr::{acf, ljung_box_test, pacf, LjungBoxResult};
 pub use cointegration::{engle_granger_test, johansen_test, EngleGrangerResult, JohansenResult};
 pub use decomposition::{seasonal_decompose, DecompType, DecompositionResult};
 pub use forecasting::{holt_linear, holt_winters, simple_exp_smoothing, ForecastResult};

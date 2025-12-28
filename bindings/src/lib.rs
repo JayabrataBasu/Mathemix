@@ -24,17 +24,11 @@ use ::mathemixx_core::{
     simple_exp_smoothing,
     sma,
     summarize_numeric,
-    wma,
     timeseries::{
-        engle_granger_test,
-        johansen_test,
-        ArimaModel,
-        EngleGrangerResult,
-        GarchModel,
-        GrangerResult,
-        JohansenResult,
-        VarModel,
+        engle_granger_test, granger_causality_test, johansen_test, ArimaModel, EngleGrangerResult,
+        GarchModel, GrangerResult, JohansenResult, VarModel,
     },
+    wma,
     ADFResult,
     BoxPlotData,
     ColumnInfo,
@@ -52,6 +46,7 @@ use ::mathemixx_core::{
     HeatmapData,
     HistogramData,
     KPSSResult,
+    LjungBoxResult,
     MatheMixxError,
     OlsOptions,
     OlsResult,
@@ -1200,23 +1195,35 @@ pub fn regress_dataset(
 #[pyfunction]
 #[pyo3(signature = (data, periods=1))]
 pub fn py_lag(data: Vec<f64>, periods: usize) -> PyResult<Vec<f64>> {
-    Ok(lag(&data, periods))
+    match lag(&data, periods) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
 #[pyo3(signature = (data, periods=1))]
 pub fn py_diff(data: Vec<f64>, periods: usize) -> PyResult<Vec<f64>> {
-    Ok(diff(&data, periods))
+    match diff(&data, periods) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
 pub fn py_sma(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
-    Ok(sma(&data, window))
+    match sma(&data, window) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
 pub fn py_ema(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
-    Ok(ema(&data, window))
+    match ema(&data, window) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
@@ -1231,7 +1238,10 @@ pub fn py_rolling_mean(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
 
 #[pyfunction]
 pub fn py_rolling_std(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
-    Ok(rolling_std(&data, window))
+    match rolling_std(&data, window) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
@@ -1246,17 +1256,31 @@ pub fn py_rolling_max(data: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
 
 #[pyfunction]
 pub fn py_acf(data: Vec<f64>, nlags: usize) -> PyResult<Vec<f64>> {
-    Ok(acf(&data, nlags))
+    match acf(&data, nlags) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
 pub fn py_pacf(data: Vec<f64>, nlags: usize) -> PyResult<Vec<f64>> {
-    Ok(pacf(&data, nlags))
+    match pacf(&data, nlags) {
+        Ok(result) => Ok(result),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyfunction]
-pub fn py_ljung_box_test(data: Vec<f64>, lags: usize) -> PyResult<(f64, f64)> {
-    Ok(ljung_box_test(&data, lags))
+pub fn py_ljung_box_test(data: Vec<f64>, lags: usize) -> PyResult<PyLjungBoxResult> {
+    match ljung_box_test(&data, lags) {
+        Ok(result) => Ok(PyLjungBoxResult {
+            statistic: result.statistic,
+            p_value: result.p_value,
+            lags: result.lags,
+            degrees_of_freedom: result.degrees_of_freedom,
+        }),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
 }
 
 #[pyclass(name = "ADFResult", module = "mathemixx_core")]
@@ -1317,6 +1341,29 @@ impl PyKPSSResult {
     }
 }
 
+#[pyclass(name = "LjungBoxResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyLjungBoxResult {
+    #[pyo3(get)]
+    pub statistic: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub lags: usize,
+    #[pyo3(get)]
+    pub degrees_of_freedom: usize,
+}
+
+#[pymethods]
+impl PyLjungBoxResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "LjungBoxResult(statistic={:.4}, p_value={:.4}, lags={}, df={})",
+            self.statistic, self.p_value, self.lags, self.degrees_of_freedom
+        )
+    }
+}
+
 #[pyfunction]
 pub fn py_adf_test(data: Vec<f64>, max_lags: Option<usize>) -> PyResult<PyADFResult> {
     let result = adf_test(&data, max_lags);
@@ -1330,8 +1377,8 @@ pub fn py_adf_test(data: Vec<f64>, max_lags: Option<usize>) -> PyResult<PyADFRes
 }
 
 #[pyfunction]
-pub fn py_kpss_test(data: Vec<f64>, lags: Option<usize>) -> PyResult<PyKPSSResult> {
-    let result = kpss_test(&data, lags);
+pub fn py_kpss_test(data: Vec<f64>, nlags: Option<usize>) -> PyResult<PyKPSSResult> {
+    let result = kpss_test(&data, nlags);
     Ok(PyKPSSResult {
         test_statistic: result.test_statistic,
         p_value: result.p_value,
@@ -1489,6 +1536,334 @@ pub fn py_holt_winters(
     }
 }
 
+#[pyclass(name = "EngleGrangerResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyEngleGrangerResult {
+    #[pyo3(get)]
+    pub t_statistic: f64,
+    #[pyo3(get)]
+    pub critical_value: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub is_cointegrated: bool,
+}
+
+#[pymethods]
+impl PyEngleGrangerResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "EngleGrangerResult(t_stat={:.4}, p_value={:.4}, cointegrated={})",
+            self.t_statistic, self.p_value, self.is_cointegrated
+        )
+    }
+}
+
+impl From<EngleGrangerResult> for PyEngleGrangerResult {
+    fn from(result: EngleGrangerResult) -> Self {
+        PyEngleGrangerResult {
+            t_statistic: result.t_statistic,
+            critical_value: result.critical_value,
+            p_value: result.p_value,
+            is_cointegrated: result.is_cointegrated,
+        }
+    }
+}
+
+#[pyclass(name = "JohansenResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyJohansenResult {
+    #[pyo3(get)]
+    pub eigenvalues: Vec<f64>,
+    #[pyo3(get)]
+    pub trace_statistics: Vec<f64>,
+    #[pyo3(get)]
+    pub critical_values: Vec<f64>,
+    #[pyo3(get)]
+    pub cointegration_rank: usize,
+}
+
+#[pymethods]
+impl PyJohansenResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "JohansenResult(rank={}, eigenvalues={:?})",
+            self.cointegration_rank, self.eigenvalues
+        )
+    }
+}
+
+impl From<JohansenResult> for PyJohansenResult {
+    fn from(result: JohansenResult) -> Self {
+        PyJohansenResult {
+            eigenvalues: result.eigenvalues,
+            trace_statistics: result.trace_statistics,
+            critical_values: result.critical_values,
+            cointegration_rank: result.cointegration_rank,
+        }
+    }
+}
+
+#[pyclass(name = "GrangerResult", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyGrangerResult {
+    #[pyo3(get)]
+    pub f_statistic: f64,
+    #[pyo3(get)]
+    pub p_value: f64,
+    #[pyo3(get)]
+    pub is_causal: bool,
+}
+
+#[pymethods]
+impl PyGrangerResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "GrangerResult(f_stat={:.4}, p_value={:.4}, causal={})",
+            self.f_statistic, self.p_value, self.is_causal
+        )
+    }
+}
+
+impl From<GrangerResult> for PyGrangerResult {
+    fn from(result: GrangerResult) -> Self {
+        PyGrangerResult {
+            f_statistic: result.f_statistic,
+            p_value: result.p_value,
+            is_causal: result.is_causal,
+        }
+    }
+}
+
+#[pyclass(name = "ArimaModel", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyArimaModel {
+    inner: ArimaModel,
+}
+
+#[pymethods]
+impl PyArimaModel {
+    #[new]
+    fn new(p: usize, d: usize, q: usize) -> PyResult<Self> {
+        // For now, require fitting; could add default constructor later
+        Err(PyValueError::new_err("Use fit() to create ArimaModel"))
+    }
+
+    #[staticmethod]
+    fn fit(data: Vec<f64>, p: usize, d: usize, q: usize) -> PyResult<Self> {
+        match ArimaModel::fit(&data, p, d, q) {
+            Ok(model) => Ok(PyArimaModel { inner: model }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    fn forecast(&self, horizon: usize, confidence: f64) -> PyResult<PyForecastResult> {
+        match self.inner.forecast(horizon, confidence) {
+            Ok(result) => Ok(PyForecastResult {
+                forecasts: result.forecasts,
+                lower_bound: result.lower_bound,
+                upper_bound: result.upper_bound,
+                confidence_level: result.confidence_level,
+            }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    #[getter]
+    fn p(&self) -> usize {
+        self.inner.p
+    }
+
+    #[getter]
+    fn d(&self) -> usize {
+        self.inner.d
+    }
+
+    #[getter]
+    fn q(&self) -> usize {
+        self.inner.q
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ArimaModel(p={}, d={}, q={})",
+            self.inner.p, self.inner.d, self.inner.q
+        )
+    }
+}
+
+#[pyclass(name = "GarchModel", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyGarchModel {
+    inner: GarchModel,
+}
+
+#[pymethods]
+impl PyGarchModel {
+    #[staticmethod]
+    fn fit(returns: Vec<f64>, p: usize, q: usize) -> PyResult<Self> {
+        match GarchModel::fit(&returns, p, q) {
+            Ok(model) => Ok(PyGarchModel { inner: model }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    fn forecast_volatility(&self, horizon: usize, confidence: f64) -> PyResult<PyGarchForecast> {
+        match self.inner.forecast_volatility(horizon, confidence) {
+            Ok(result) => Ok(PyGarchForecast {
+                variances: result.variances,
+                lower_bound: result.lower_bound,
+                upper_bound: result.upper_bound,
+                confidence_level: result.confidence_level,
+            }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    #[getter]
+    fn p(&self) -> usize {
+        self.inner.p
+    }
+
+    #[getter]
+    fn q(&self) -> usize {
+        self.inner.q
+    }
+
+    fn __repr__(&self) -> String {
+        format!("GarchModel(p={}, q={})", self.inner.p, self.inner.q)
+    }
+}
+
+#[pyclass(name = "GarchForecast", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyGarchForecast {
+    #[pyo3(get)]
+    pub variances: Vec<f64>,
+    #[pyo3(get)]
+    pub lower_bound: Vec<f64>,
+    #[pyo3(get)]
+    pub upper_bound: Vec<f64>,
+    #[pyo3(get)]
+    pub confidence_level: f64,
+}
+
+#[pymethods]
+impl PyGarchForecast {
+    fn __repr__(&self) -> String {
+        format!(
+            "GarchForecast(horizon={}, confidence={:.0}%)",
+            self.variances.len(),
+            self.confidence_level * 100.0
+        )
+    }
+}
+
+#[pyclass(name = "VarModel", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyVarModel {
+    inner: VarModel,
+}
+
+#[pymethods]
+impl PyVarModel {
+    #[staticmethod]
+    fn fit(data: Vec<Vec<f64>>, lag_order: usize) -> PyResult<Self> {
+        match VarModel::fit(&data, lag_order) {
+            Ok(model) => Ok(PyVarModel { inner: model }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    fn forecast(&self, horizon: usize, confidence: f64) -> PyResult<PyVarForecast> {
+        match self.inner.forecast(horizon, confidence) {
+            Ok(result) => Ok(PyVarForecast {
+                forecasts: result
+                    .forecasts
+                    .into_iter()
+                    .map(|arr| arr.to_vec())
+                    .collect(),
+                lower_bound: result
+                    .lower_bound
+                    .into_iter()
+                    .map(|arr| arr.to_vec())
+                    .collect(),
+                upper_bound: result
+                    .upper_bound
+                    .into_iter()
+                    .map(|arr| arr.to_vec())
+                    .collect(),
+                confidence_level: result.confidence_level,
+            }),
+            Err(e) => Err(mathemixx_error_to_pyerr(e)),
+        }
+    }
+
+    #[getter]
+    fn lag_order(&self) -> usize {
+        self.inner.lag_order
+    }
+
+    fn __repr__(&self) -> String {
+        format!("VarModel(lag_order={})", self.inner.lag_order)
+    }
+}
+
+#[pyclass(name = "VarForecast", module = "mathemixx_core")]
+#[derive(Clone)]
+pub struct PyVarForecast {
+    #[pyo3(get)]
+    pub forecasts: Vec<Vec<f64>>,
+    #[pyo3(get)]
+    pub lower_bound: Vec<Vec<f64>>,
+    #[pyo3(get)]
+    pub upper_bound: Vec<Vec<f64>>,
+    #[pyo3(get)]
+    pub confidence_level: f64,
+}
+
+#[pymethods]
+impl PyVarForecast {
+    fn __repr__(&self) -> String {
+        format!(
+            "VarForecast(horizon={}, confidence={:.0}%)",
+            self.forecasts.len(),
+            self.confidence_level * 100.0
+        )
+    }
+}
+
+#[pyfunction]
+pub fn py_engle_granger_test(
+    series1: Vec<f64>,
+    series2: Vec<f64>,
+) -> PyResult<PyEngleGrangerResult> {
+    match engle_granger_test(&series1, &series2) {
+        Ok(result) => Ok(result.into()),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
+}
+
+#[pyfunction]
+pub fn py_johansen_test(data: Vec<Vec<f64>>) -> PyResult<Vec<PyJohansenResult>> {
+    match johansen_test(&data) {
+        Ok(results) => Ok(results.into_iter().map(|r| r.into()).collect()),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
+}
+
+#[pyfunction]
+pub fn py_granger_causality_test(
+    x: Vec<f64>,
+    y: Vec<f64>,
+    lag: usize,
+) -> PyResult<PyGrangerResult> {
+    match granger_causality_test(&x, &y, lag) {
+        Ok(result) => Ok(result.into()),
+        Err(e) => Err(mathemixx_error_to_pyerr(e)),
+    }
+}
+
 #[pymodule]
 fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_class::<PyDataSet>()?;
@@ -1519,8 +1894,17 @@ fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     // Phase 7: Time Series functions and classes
     module.add_class::<PyADFResult>()?;
     module.add_class::<PyKPSSResult>()?;
+    module.add_class::<PyLjungBoxResult>()?;
     module.add_class::<PyDecompositionResult>()?;
     module.add_class::<PyForecastResult>()?;
+    module.add_class::<PyEngleGrangerResult>()?;
+    module.add_class::<PyJohansenResult>()?;
+    module.add_class::<PyGrangerResult>()?;
+    module.add_class::<PyArimaModel>()?;
+    module.add_class::<PyGarchModel>()?;
+    module.add_class::<PyGarchForecast>()?;
+    module.add_class::<PyVarModel>()?;
+    module.add_class::<PyVarForecast>()?;
     module.add_function(wrap_pyfunction!(py_lag, module)?)?;
     module.add_function(wrap_pyfunction!(py_diff, module)?)?;
     module.add_function(wrap_pyfunction!(py_sma, module)?)?;
@@ -1539,6 +1923,9 @@ fn mathemixx_core(_py: Python, module: &PyModule) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(py_simple_exp_smoothing, module)?)?;
     module.add_function(wrap_pyfunction!(py_holt_linear, module)?)?;
     module.add_function(wrap_pyfunction!(py_holt_winters, module)?)?;
+    module.add_function(wrap_pyfunction!(py_engle_granger_test, module)?)?;
+    module.add_function(wrap_pyfunction!(py_johansen_test, module)?)?;
+    module.add_function(wrap_pyfunction!(py_granger_causality_test, module)?)?;
 
     Ok(())
 }
