@@ -520,7 +520,7 @@ pub struct PyPairPlotData {
 #[pymethods]
 impl PyPairPlotData {
     /// Get data for a specific variable
-    pub fn get_data(&self, py: Python, variable: &str) -> PyResult<Vec<f64>> {
+    pub fn get_data(&self, _py: Python, _variable: &str) -> PyResult<Vec<f64>> {
         // This will be populated when we add the method
         Ok(vec![])
     }
@@ -1295,6 +1295,8 @@ pub struct PyADFResult {
     #[pyo3(get)]
     pub n_obs: usize,
     #[pyo3(get)]
+    pub critical_values: (f64, f64, f64),
+    #[pyo3(get)]
     pub is_stationary: bool,
 }
 
@@ -1305,11 +1307,6 @@ impl PyADFResult {
             "ADFResult(statistic={:.4}, p_value={:.4}, stationary={})",
             self.test_statistic, self.p_value, self.is_stationary
         )
-    }
-
-    #[getter]
-    fn critical_values(&self) -> (f64, f64, f64) {
-        (-3.43, -2.86, -2.57) // 1%, 5%, 10%
     }
 }
 
@@ -1323,6 +1320,8 @@ pub struct PyKPSSResult {
     #[pyo3(get)]
     pub lags_used: usize,
     #[pyo3(get)]
+    pub critical_values: (f64, f64, f64),
+    #[pyo3(get)]
     pub is_stationary: bool,
 }
 
@@ -1333,11 +1332,6 @@ impl PyKPSSResult {
             "KPSSResult(statistic={:.4}, p_value={:.4}, stationary={})",
             self.test_statistic, self.p_value, self.is_stationary
         )
-    }
-
-    #[getter]
-    fn critical_values(&self) -> (f64, f64, f64) {
-        (0.739, 0.463, 0.347) // 1%, 5%, 10%
     }
 }
 
@@ -1372,6 +1366,7 @@ pub fn py_adf_test(data: Vec<f64>, max_lags: Option<usize>) -> PyResult<PyADFRes
         p_value: result.p_value,
         lags_used: result.lags_used,
         n_obs: result.n_obs,
+        critical_values: result.critical_values,
         is_stationary: result.is_stationary,
     })
 }
@@ -1383,6 +1378,7 @@ pub fn py_kpss_test(data: Vec<f64>, nlags: Option<usize>) -> PyResult<PyKPSSResu
         test_statistic: result.test_statistic,
         p_value: result.p_value,
         lags_used: result.lags_used,
+        critical_values: result.critical_values,
         is_stationary: result.is_stationary,
     })
 }
@@ -1644,7 +1640,7 @@ pub struct PyArimaModel {
 #[pymethods]
 impl PyArimaModel {
     #[new]
-    fn new(p: usize, d: usize, q: usize) -> PyResult<Self> {
+    fn new(_p: usize, _d: usize, _q: usize) -> PyResult<Self> {
         // For now, require fitting; could add default constructor later
         Err(PyValueError::new_err("Use fit() to create ArimaModel"))
     }

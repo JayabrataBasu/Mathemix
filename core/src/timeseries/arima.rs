@@ -39,7 +39,7 @@ impl ArimaModel {
         };
 
         // Estimate ARMA(p,q) on differenced data
-        let (ar_coeffs, ma_coeffs, intercept, residuals) = estimate_arma(&differenced, p, q)?;
+        let (ar_coeffs, ma_coeffs, intercept, _residuals) = estimate_arma(&differenced, p, q)?;
 
         // Calculate fitted values and residuals
         let fitted = calculate_fitted(&differenced, &ar_coeffs, &ma_coeffs, intercept);
@@ -79,7 +79,7 @@ impl ArimaModel {
         let mut upper_bound = Vec::with_capacity(horizon);
 
         // Get the last fitted value as starting point
-        let mut last_value = *self.fitted.last().unwrap();
+        let last_value = *self.fitted.last().unwrap();
 
         // Simple forecast (constant for now - should be improved)
         for _ in 0..horizon {

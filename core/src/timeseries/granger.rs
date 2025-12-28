@@ -25,7 +25,7 @@ pub fn granger_causality_test(x: &[f64], y: &[f64], lag: usize) -> Result<Grange
 
     // Calculate F-statistic
     let n = (x.len() - lag) as f64;
-    let k_restricted = lag as f64;
+    let _k_restricted = lag as f64;
     let k_unrestricted = (lag * 2) as f64;
 
     let f_stat = ((restricted_rss - unrestricted_rss) / lag as f64) / (unrestricted_rss / (n - k_unrestricted));
@@ -83,9 +83,9 @@ fn fit_unrestricted_model(y: &[f64], x: &[f64], lag: usize) -> Result<f64, Mathe
 }
 
 /// Simple OLS implementation
-fn ols(x: &[Vec<f64>], y: &[f64]) -> Result<Vec<f64>, MatheMixxError> {
+fn ols(x: &[Vec<f64>], _y: &[f64]) -> Result<Vec<f64>, MatheMixxError> {
     let n_vars = x.len();
-    let n_obs = x[0].len();
+    let _n_obs = x[0].len();
 
     // Simplified OLS (not numerically stable, but for demo)
     // In practice, use proper linear algebra libraries

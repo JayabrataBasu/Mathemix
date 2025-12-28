@@ -52,7 +52,7 @@ impl GarchModel {
         let mut upper_bound = Vec::with_capacity(horizon);
 
         // Start from the last variance
-        let mut last_var = *self.variances.last().unwrap();
+        let last_var = *self.variances.last().unwrap();
 
         for _ in 0..horizon {
             variances.push(last_var);

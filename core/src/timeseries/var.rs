@@ -25,7 +25,7 @@ impl VarModel {
     /// Fit VAR(lag_order) model to multivariate data
     /// data: Vec of time series, each as Vec<f64>
     pub fn fit(data: &[Vec<f64>], lag_order: usize) -> Result<Self, MatheMixxError> {
-        let n_vars = data.len();
+        let _n_vars = data.len();
         let n_obs = data[0].len();
 
         if n_obs < lag_order + 10 {

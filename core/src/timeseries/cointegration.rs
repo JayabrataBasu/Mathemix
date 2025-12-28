@@ -1,6 +1,5 @@
 // Cointegration tests implementation
 
-use ndarray::{Array2, Array1};
 use crate::errors::MatheMixxError;
 
 /// Result of Engle-Granger cointegration test
@@ -89,8 +88,8 @@ fn regress_series(series1: &[f64], series2: &[f64]) -> Result<Vec<f64>, MatheMix
 /// Helper: ADF test on residuals (simplified)
 fn adf_test_residuals(residuals: &[f64]) -> Result<AdfResult, MatheMixxError> {
     // Simplified ADF test
-    let n = residuals.len();
-    let diff_residuals: Vec<f64> = residuals.windows(2).map(|w| w[1] - w[0]).collect();
+    let _n = residuals.len();
+    let _diff_residuals: Vec<f64> = residuals.windows(2).map(|w| w[1] - w[0]).collect();
 
     // Simple t-statistic approximation
     let t_stat = -2.0; // Dummy value

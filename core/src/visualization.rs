@@ -6,7 +6,6 @@
 use crate::dataframe::DataSet;
 use crate::errors::{MatheMixxError, Result};
 use crate::ols::OlsResult;
-use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::HashMap;
