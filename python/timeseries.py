@@ -154,7 +154,8 @@ class TimeSeriesAnalyzer:
         self,
         alpha: float = 0.3,
         horizon: int = 12,
-        confidence: float = 0.95
+        confidence: float = 0.95,
+        confidence_level: Optional[float] = None,
     ):
         """
         Simple Exponential Smoothing forecast.
@@ -167,14 +168,16 @@ class TimeSeriesAnalyzer:
         Returns:
             ForecastResult with forecasts, lower_bound, upper_bound
         """
-        return core.py_simple_exp_smoothing(self.data, alpha, horizon, confidence)
+        conf = confidence_level if confidence_level is not None else confidence
+        return core.py_simple_exp_smoothing(self.data, alpha, horizon, conf)
     
     def forecast_holt(
         self,
         alpha: float = 0.3,
         beta: float = 0.1,
         horizon: int = 12,
-        confidence: float = 0.95
+        confidence: float = 0.95,
+        confidence_level: Optional[float] = None,
     ):
         """
         Holt's Linear Trend forecast.
@@ -188,7 +191,8 @@ class TimeSeriesAnalyzer:
         Returns:
             ForecastResult with forecasts, lower_bound, upper_bound
         """
-        return core.py_holt_linear(self.data, alpha, beta, horizon, confidence)
+        conf = confidence_level if confidence_level is not None else confidence
+        return core.py_holt_linear(self.data, alpha, beta, horizon, conf)
     
     def forecast_holt_winters(
         self,
@@ -198,7 +202,8 @@ class TimeSeriesAnalyzer:
         gamma: float = 0.2,
         horizon: int = 12,
         seasonal_type: str = "additive",
-        confidence: float = 0.95
+        confidence: float = 0.95,
+        confidence_level: Optional[float] = None,
     ):
         """
         Holt-Winters seasonal forecast.
@@ -215,8 +220,9 @@ class TimeSeriesAnalyzer:
         Returns:
             ForecastResult with forecasts, lower_bound, upper_bound
         """
+        conf = confidence_level if confidence_level is not None else confidence
         return core.py_holt_winters(
-            self.data, alpha, beta, gamma, period, horizon, seasonal_type, confidence
+            self.data, alpha, beta, gamma, period, horizon, seasonal_type, conf
         )
 
 
@@ -276,10 +282,12 @@ def forecast_ses(
     data: List[float],
     alpha: float = 0.3,
     horizon: int = 12,
-    confidence: float = 0.95
+    confidence: float = 0.95,
+    confidence_level: Optional[float] = None,
 ):
     """Simple Exponential Smoothing forecast."""
-    return core.py_simple_exp_smoothing(data, alpha, horizon, confidence)
+    conf = confidence_level if confidence_level is not None else confidence
+    return core.py_simple_exp_smoothing(data, alpha, horizon, conf)
 
 
 def forecast_holt(
@@ -287,10 +295,12 @@ def forecast_holt(
     alpha: float = 0.3,
     beta: float = 0.1,
     horizon: int = 12,
-    confidence: float = 0.95
+    confidence: float = 0.95,
+    confidence_level: Optional[float] = None,
 ):
     """Holt's Linear Trend forecast."""
-    return core.py_holt_linear(data, alpha, beta, horizon, confidence)
+    conf = confidence_level if confidence_level is not None else confidence
+    return core.py_holt_linear(data, alpha, beta, horizon, conf)
 
 
 def forecast_holt_winters(
@@ -301,9 +311,11 @@ def forecast_holt_winters(
     gamma: float = 0.2,
     horizon: int = 12,
     seasonal_type: str = "additive",
-    confidence: float = 0.95
+    confidence: float = 0.95,
+    confidence_level: Optional[float] = None,
 ):
     """Holt-Winters seasonal forecast."""
+    conf = confidence_level if confidence_level is not None else confidence
     return core.py_holt_winters(
-        data, alpha, beta, gamma, period, horizon, seasonal_type, confidence
+        data, alpha, beta, gamma, period, horizon, seasonal_type, conf
     )

@@ -45,6 +45,7 @@ from pathlib import Path as PathLib
 sys.path.insert(0, str(PathLib(__file__).parent.parent))
 import plots
 from mathemixx_desktop.timeseries_widget import TimeSeriesWidget
+from mathemixx_desktop.error_handler import ErrorContext, DataValidationError
 
 matplotlib.use("QtAgg")
 
@@ -435,24 +436,106 @@ class MainWindow(QMainWindow):
     @Slot()
     def handle_regression(self) -> None:
         if not self.dataset:
+            QMessageBox.warning(
+                self, "No Data",
+                "Please load a CSV file first.\n\n"
+                "Use File > Open CSV to load your dataset."
+            )
             return
+        
+        # Validate dependent variable
         dependent = self.dependent_input.text().strip()
         if not dependent:
-            QMessageBox.warning(self, "Regression", "Select a dependent variable")
+            QMessageBox.warning(
+                self, "Missing Dependent Variable",
+                "Please select a dependent variable.\n\n"
+                "The dependent variable is what you want to predict (Y).\n"
+                "Click on a column name in the 'Numeric Columns' list."
+            )
             return
+        
+        # Validate independent variables
         independents = self.selected_independents()
         if dependent in independents:
             independents.remove(dependent)
+        
         if not independents:
-            QMessageBox.warning(self, "Regression", "Select at least one independent variable")
+            QMessageBox.warning(
+                self, "Missing Independent Variables",
+                "Please select at least one independent variable.\n\n"
+                "Independent variables are the predictors (X variables).\n"
+                "Select them from the 'Numeric Columns' list."
+            )
             return
+        
         try:
+            # Validate columns exist and are numeric
+            df = self.dataset.to_pandas()
+            ErrorContext.validate_column_exists(df, dependent, "regression dependent variable")
+            ErrorContext.validate_numeric_column(df, dependent)
+            
+            for ind_var in independents:
+                ErrorContext.validate_column_exists(df, ind_var, "regression independent variable")
+                ErrorContext.validate_numeric_column(df, ind_var)
+            
+            # Check for sufficient data
+            n_vars = len(independents) + 1  # +1 for intercept
+            n_obs = len(df)
+            
+            if n_obs <= n_vars:
+                raise DataValidationError(
+                    f"Insufficient observations for regression.\n\n"
+                    f"Observations: {n_obs}\n"
+                    f"Variables: {n_vars} (including intercept)\n\n"
+                    f"You need more observations than variables.\n"
+                    f"Either:\n"
+                    f"- Load a dataset with more rows\n"
+                    f"- Use fewer independent variables"
+                )
+            
+            if n_obs < n_vars * 3:
+                QMessageBox.warning(
+                    self, "Low Sample Size",
+                    f"Small sample size detected.\n\n"
+                    f"Observations: {n_obs}\n"
+                    f"Variables: {n_vars}\n"
+                    f"Recommended minimum: {n_vars * 3}\n\n"
+                    f"Results may be unreliable. Consider loading more data."
+                )
+            
+            # Check for missing values
+            relevant_cols = [dependent] + independents
+            missing_counts = df[relevant_cols].isnull().sum()
+            if missing_counts.any():
+                missing_info = "\n".join([
+                    f"  {col}: {count} missing" 
+                    for col, count in missing_counts.items() if count > 0
+                ])
+                raise DataValidationError(
+                    f"Missing values detected in selected columns.\n\n"
+                    f"{missing_info}\n\n"
+                    f"Please either:\n"
+                    f"- Remove rows with missing values\n"
+                    f"- Fill missing values\n"
+                    f"- Select different columns"
+                )
+            
+            # Check for variance in dependent variable
+            dep_data = df[dependent].values
+            ErrorContext.validate_variance(dep_data.tolist(), "regression dependent variable")
+            
+            # Perform regression
             result = self.dataset.regress_ols(dependent, independents, True)
             self.current_regression_result = result
             self.diagnostic_button.setEnabled(True)
+            
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
+            return
         except Exception as exc:  # pylint: disable=broad-except
             logging.exception("Regression failed", exc_info=exc)
-            QMessageBox.critical(self, "Regression", f"Regression failed: {exc}")
+            error_msg = ErrorContext.format_regression_error(exc, dependent, independents)
+            QMessageBox.critical(self, "Regression Error", error_msg)
             return
 
         coeff_rows = result.table()
@@ -551,21 +634,46 @@ class MainWindow(QMainWindow):
     def show_exploratory_plot(self, plot_type: str) -> None:
         """Show exploratory data visualization."""
         if not self.dataset:
-            QMessageBox.warning(self, "Plots", "Load a dataset first")
-            return
-        
-        # Get selected variable from list or dependent input
-        selected = self.selected_independents()
-        if selected:
-            column = selected[0]
-        else:
-            column = self.dependent_input.text().strip()
-        
-        if not column and plot_type != "heatmap":
-            QMessageBox.warning(self, "Plots", "Select a variable first")
+            QMessageBox.warning(
+                self, "No Data",
+                "Please load a CSV file first.\n\n"
+                "Use File > Open CSV to load your dataset."
+            )
             return
         
         try:
+            # Get selected variable from list or dependent input
+            selected = self.selected_independents()
+            if selected:
+                column = selected[0]
+            else:
+                column = self.dependent_input.text().strip()
+            
+            # Validate column selection for non-heatmap plots
+            if not column and plot_type != "heatmap":
+                QMessageBox.warning(
+                    self, "Missing Selection",
+                    f"Please select a column for the {plot_type}.\n\n"
+                    f"Click on a column name in the 'Numeric Columns' list."
+                )
+                return
+            
+            # Validate column exists and is numeric
+            df = self.dataset.to_pandas()
+            if column:  # If a specific column is selected
+                ErrorContext.validate_column_exists(df, column, f"{plot_type} visualization")
+                ErrorContext.validate_numeric_column(df, column)
+                
+                # Check for sufficient data
+                data = df[column].dropna()
+                if len(data) < 2:
+                    raise DataValidationError(
+                        f"Insufficient data for {plot_type}.\n\n"
+                        f"Column '{column}' has only {len(data)} valid values.\n"
+                        f"Need at least 2 data points.\n\n"
+                        f"Check for missing values or select a different column."
+                    )
+            
             # Switch to Plots tab
             right_tabs = self.findChild(QTabWidget)
             if right_tabs:
@@ -580,11 +688,17 @@ class MainWindow(QMainWindow):
                 "heatmap": "Correlation Heatmap",
                 "violin": "Violin Plot"
             }
-            self.log_command(f"{plot_type} {column if column else ''}", 
-                           f"Displayed {plot_names.get(plot_type, plot_type)}")
+            self.log_command(
+                f"{plot_type} {column if column else ''}", 
+                f"Displayed {plot_names.get(plot_type, plot_type)}"
+            )
             
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
         except Exception as exc:  # pylint: disable=broad-except
             logging.exception(f"Failed to create {plot_type} plot", exc_info=exc)
+            error_msg = ErrorContext.format_plot_error(exc, plot_type)
+            QMessageBox.critical(self, "Plot Error", error_msg)
             QMessageBox.critical(self, "Error", f"Failed to create plot: {exc}")
     
     @Slot()

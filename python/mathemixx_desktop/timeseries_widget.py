@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import plots
 from timeseries import TimeSeriesAnalyzer
+from mathemixx_desktop.error_handler import ErrorContext, DataValidationError
 
 
 class TimeSeriesWidget(QWidget):
@@ -351,42 +352,106 @@ class TimeSeriesWidget(QWidget):
     def _apply_operation(self, op_type):
         """Apply time series operation."""
         if not self.ts_analyzer:
+            QMessageBox.warning(
+                self, "No Data",
+                "Please select a time series column first.\n\n"
+                "Use the column list in section 1 to choose a numeric column."
+            )
             return
         
         try:
+            # Validate data
+            ErrorContext.validate_data_loaded(self.current_series, "time series operations")
+            ErrorContext.validate_sufficient_data(
+                self.current_series, 
+                10, 
+                f"{op_type} operation"
+            )
+            
             if op_type == "lag":
-                result = self.ts_analyzer.lag(self.lag_spin.value())
+                periods = self.lag_spin.value()
+                if periods >= len(self.current_series):
+                    raise DataValidationError(
+                        f"Lag period too large.\n\n"
+                        f"Lag periods: {periods}\n"
+                        f"Data points: {len(self.current_series)}\n\n"
+                        f"The lag must be smaller than the number of data points.\n"
+                        f"Try reducing the lag period."
+                    )
+                
+                result = self.ts_analyzer.lag(periods)
+                valid_count = len([x for x in result if not np.isnan(x)])
                 self.results_text.setPlainText(
-                    f"Lag {self.lag_spin.value()}: {len(result)} values\n"
-                    f"Mean: {np.mean(result):.4f}"
+                    f"Lag {periods} Operation\n"
+                    f"{'='*40}\n"
+                    f"Total values: {len(result)}\n"
+                    f"Valid values: {valid_count}\n"
+                    f"NaN values (first {periods}): {len(result) - valid_count}\n"
+                    f"Mean (valid): {np.nanmean(result):.4f}\n"
+                    f"Std (valid): {np.nanstd(result):.4f}"
                 )
-                self.log_callback(f"lag({self.lag_spin.value()})")
+                self.log_callback(f"lag({periods})")
             
             elif op_type == "diff":
-                result = self.ts_analyzer.diff(self.diff_spin.value())
+                order = self.diff_spin.value()
+                if order >= len(self.current_series):
+                    raise DataValidationError(
+                        f"Difference order too large.\n\n"
+                        f"Order: {order}\n"
+                        f"Data points: {len(self.current_series)}\n\n"
+                        f"The difference order must be smaller than the number of data points.\n"
+                        f"Try reducing the order."
+                    )
+                
+                result = self.ts_analyzer.diff(order)
+                valid_count = len([x for x in result if not np.isnan(x)])
                 self.results_text.setPlainText(
-                    f"Difference order {self.diff_spin.value()}: {len(result)} values\n"
-                    f"Mean: {np.mean(result):.4f} | Std: {np.std(result):.4f}"
+                    f"Difference Order {order} Operation\n"
+                    f"{'='*40}\n"
+                    f"Total values: {len(result)}\n"
+                    f"Valid values: {valid_count}\n"
+                    f"Mean (valid): {np.nanmean(result):.4f}\n"
+                    f"Std (valid): {np.nanstd(result):.4f}"
                 )
-                self.log_callback(f"diff({self.diff_spin.value()})")
+                self.log_callback(f"diff({order})")
             
             elif op_type in ["sma", "ema", "wma"]:
                 window = self.ma_window.value()
+                ErrorContext.validate_window_size(
+                    len(self.current_series), 
+                    window, 
+                    f"{op_type.upper()} moving average"
+                )
+                
                 if op_type == "sma":
                     result = self.ts_analyzer.sma(window)
+                    full_name = "Simple Moving Average"
                 elif op_type == "ema":
                     result = self.ts_analyzer.ema(window)
+                    full_name = "Exponential Moving Average"
                 else:
                     result = self.ts_analyzer.wma(window)
+                    full_name = "Weighted Moving Average"
                 
+                valid_count = len([x for x in result if not np.isnan(x)])
                 self.results_text.setPlainText(
-                    f"{op_type.upper()}({window}): {len(result)} values\n"
-                    f"Mean: {np.mean(result):.4f} | Std: {np.std(result):.4f}"
+                    f"{full_name} (Window={window})\n"
+                    f"{'='*40}\n"
+                    f"Total values: {len(result)}\n"
+                    f"Valid values: {valid_count}\n"
+                    f"Mean (valid): {np.nanmean(result):.4f}\n"
+                    f"Std (valid): {np.nanstd(result):.4f}\n\n"
+                    f"Note: First {window-1} values are NaN due to incomplete window"
                 )
                 self.log_callback(f"{op_type}({window})")
         
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Operation failed: {e}")
+            error_msg = ErrorContext.format_timeseries_error(
+                e, f"{op_type.upper()} operation"
+            )
+            QMessageBox.critical(self, "Operation Error", error_msg)
     
     @Slot()
     def _plot_acf_pacf(self, plot_type):
@@ -426,24 +491,61 @@ class TimeSeriesWidget(QWidget):
     def _ljung_box_test(self):
         """Run Ljung-Box test."""
         if not self.ts_analyzer:
+            QMessageBox.warning(
+                self, "No Data",
+                "Please select a time series column first."
+            )
             return
         
         try:
+            # Validate data
+            ErrorContext.validate_data_loaded(self.current_series, "Ljung-Box test")
+            ErrorContext.validate_sufficient_data(
+                self.current_series, 
+                20, 
+                "Ljung-Box test (need at least 20 points for reliable test)"
+            )
+            ErrorContext.validate_variance(self.current_series, "Ljung-Box test")
+            
             nlags = self.nlags_spin.value()
+            if nlags >= len(self.current_series) // 2:
+                raise DataValidationError(
+                    f"Too many lags for Ljung-Box test.\n\n"
+                    f"Requested lags: {nlags}\n"
+                    f"Data points: {len(self.current_series)}\n"
+                    f"Recommended maximum: {len(self.current_series) // 3}\n\n"
+                    f"Try reducing the number of lags."
+                )
+            
             result = self.ts_analyzer.ljung_box_test(nlags)
+            statistic, p_value = result
+            
+            interpretation = (
+                "AUTOCORRELATION DETECTED (Reject H0)" if p_value < 0.05 
+                else "NO SIGNIFICANT AUTOCORRELATION (Fail to reject H0)"
+            )
             
             self.results_text.setPlainText(
-                f"Ljung-Box Test (lags={nlags})\n"
+                f"Ljung-Box Test Results\n"
                 f"{'='*40}\n"
-                f"Statistic: {result['statistic']:.4f}\n"
-                f"P-value: {result['p_value']:.4f}\n"
-                f"Degrees of Freedom: {result['degrees_of_freedom']}\n\n"
-                f"Interpretation: {'No significant autocorrelation' if result['p_value'] > 0.05 else 'Significant autocorrelation detected'}"
+                f"Test Statistic: {statistic:.4f}\n"
+                f"P-value: {p_value:.4f}\n"
+                f"Lags tested: {nlags}\n\n"
+                f"Interpretation (α=0.05):\n"
+                f"{interpretation}\n\n"
+                f"H0: No autocorrelation in the residuals\n"
+                f"H1: Autocorrelation present\n\n"
+                f"{'Low p-value (<0.05) indicates autocorrelation is present.' if p_value < 0.05 else 'High p-value suggests no significant autocorrelation.'}"
             )
-            self.log_callback(f"ljung_box_test(nlags={nlags})")
+            self.log_callback(f"ljung_box_test(lags={nlags})")
         
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Test failed: {e}")
+            error_msg = ErrorContext.format_timeseries_error(
+                e, "Ljung-Box Test", min_points=20
+            )
+            QMessageBox.critical(self, "Test Error", error_msg)
     
     @Slot()
     def _adf_test(self):
@@ -537,6 +639,72 @@ class TimeSeriesWidget(QWidget):
     def _decompose(self):
         """Perform seasonal decomposition."""
         if not self.ts_analyzer:
+            QMessageBox.warning(
+                self, "No Data",
+                "Please select a time series column first."
+            )
+            return
+        
+        try:
+            # Validate data
+            ErrorContext.validate_data_loaded(self.current_series, "seasonal decomposition")
+            
+            period = self.period_spin.value()
+            model = self.decompose_model.currentText().lower()
+            
+            # Validate period
+            ErrorContext.validate_period(period, len(self.current_series), "seasonal decomposition")
+            
+            # Need at least 2 complete cycles
+            min_points = period * 2
+            if len(self.current_series) < min_points:
+                raise DataValidationError(
+                    f"Insufficient data for seasonal decomposition.\n\n"
+                    f"Period: {period}\n"
+                    f"Data points: {len(self.current_series)}\n"
+                    f"Minimum required: {min_points} (2 complete cycles)\n\n"
+                    f"Either reduce the period or load more data."
+                )
+            
+            result = self.ts_analyzer.decompose(period, model)
+            
+            # Plot decomposition
+            self.plot_canvas.clear()
+            fig = plots.plot_decomposition(result)
+            self.plot_canvas.figure = fig
+            self.plot_canvas.draw()
+            
+            # Show summary
+            trend_mean = np.nanmean(result.trend)
+            seasonal_range = np.nanmax(result.seasonal) - np.nanmin(result.seasonal)
+            residual_std = np.nanstd(result.residual)
+            
+            self.results_text.setPlainText(
+                f"{model.capitalize()} Seasonal Decomposition\n"
+                f"{'='*40}\n"
+                f"Period: {period}\n"
+                f"Data points: {len(self.current_series)}\n"
+                f"Cycles: {len(self.current_series) // period}\n\n"
+                f"Components:\n"
+                f"  Trend: Mean={trend_mean:.4f}\n"
+                f"  Seasonal: Range={seasonal_range:.4f}\n"
+                f"  Residual: Std={residual_std:.4f}\n\n"
+                f"The plot shows four components:\n"
+                f"- Observed: Original time series\n"
+                f"- Trend: Long-term progression\n"
+                f"- Seasonal: Repeating pattern\n"
+                f"- Residual: Remaining variation"
+            )
+            self.log_callback(f"seasonal_decompose(period={period}, model={model})")
+        
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
+        except Exception as e:
+            error_msg = ErrorContext.format_timeseries_error(
+                e, "Seasonal Decomposition", period=self.period_spin.value()
+            )
+            QMessageBox.critical(self, "Decomposition Error", error_msg)
+        if not self.ts_analyzer:
             return
         
         try:
@@ -570,9 +738,21 @@ class TimeSeriesWidget(QWidget):
     def _forecast(self):
         """Generate forecast."""
         if not self.ts_analyzer:
+            QMessageBox.warning(
+                self, "No Data",
+                "Please select a time series column first."
+            )
             return
         
         try:
+            # Validate data
+            ErrorContext.validate_data_loaded(self.current_series, "forecasting")
+            ErrorContext.validate_sufficient_data(
+                self.current_series, 
+                20, 
+                "forecasting (need at least 20 historical points for reliable forecast)"
+            )
+            
             method = self.forecast_method.currentText()
             alpha = self.alpha_spin.value()
             beta = self.beta_spin.value()
@@ -581,18 +761,55 @@ class TimeSeriesWidget(QWidget):
             horizon = self.horizon_spin.value()
             confidence = self.confidence_spin.value()
             
+            # Validate parameters
+            ErrorContext.validate_parameter_range(alpha, "alpha (α)", 0.0, 1.0, inclusive=False)
+            ErrorContext.validate_parameter_range(beta, "beta (β)", 0.0, 1.0, inclusive=False)
+            ErrorContext.validate_parameter_range(gamma, "gamma (γ)", 0.0, 1.0, inclusive=False)
+            ErrorContext.validate_parameter_range(confidence, "confidence level", 0.5, 0.999)
+            
+            if horizon <= 0:
+                raise DataValidationError(
+                    f"Forecast horizon must be positive.\n\n"
+                    f"Current value: {horizon}\n"
+                    f"Please enter a positive number of periods to forecast."
+                )
+            
+            if horizon > len(self.current_series):
+                QMessageBox.warning(
+                    self, "Large Horizon",
+                    f"Forecasting {horizon} periods ahead with only {len(self.current_series)} historical points.\n\n"
+                    f"Forecasts may be unreliable. Consider:\n"
+                    f"- Reducing horizon\n"
+                    f"- Loading more historical data"
+                )
+            
+            # For Holt-Winters, validate period
+            if method == "Holt-Winters":
+                ErrorContext.validate_period(period, len(self.current_series), "Holt-Winters forecasting")
+                if len(self.current_series) < period * 2:
+                    raise DataValidationError(
+                        f"Insufficient data for Holt-Winters forecasting.\n\n"
+                        f"Period: {period}\n"
+                        f"Data points: {len(self.current_series)}\n"
+                        f"Minimum required: {period * 2} (2 complete cycles)\n\n"
+                        f"Either:\n"
+                        f"- Load more historical data\n"
+                        f"- Reduce the period\n"
+                        f"- Use Simple Exp Smoothing or Holt Linear instead"
+                    )
+            
             if method == "Simple Exp Smoothing":
                 result = self.ts_analyzer.forecast_ses(
                     alpha=alpha,
                     horizon=horizon,
-                    confidence_level=confidence
+                    confidence=confidence
                 )
             elif method == "Holt Linear":
                 result = self.ts_analyzer.forecast_holt(
                     alpha=alpha,
                     beta=beta,
                     horizon=horizon,
-                    confidence_level=confidence
+                    confidence=confidence
                 )
             else:  # Holt-Winters
                 result = self.ts_analyzer.forecast_holt_winters(
@@ -601,33 +818,50 @@ class TimeSeriesWidget(QWidget):
                     gamma=gamma,
                     period=period,
                     horizon=horizon,
-                    confidence_level=confidence
+                    confidence=confidence
                 )
             
             # Plot forecast
             self.plot_canvas.clear()
-            plots.plot_forecast(
+            ax = plots.plot_forecast(
                 self.current_series,
                 result,
-                n_history=min(50, len(self.current_series)),
-                ax=self.plot_canvas.ax
+                n_history=min(50, len(self.current_series))
             )
+            self.plot_canvas.figure = ax.figure
             self.plot_canvas.draw()
             
             # Show forecast summary
+            forecast_preview = "\n".join([
+                f"  t+{i+1}: {val:.4f} [{result.lower_bound[i]:.4f}, {result.upper_bound[i]:.4f}]" 
+                for i, val in enumerate(result.forecasts[:min(10, horizon)])
+            ])
+            
+            if horizon > 10:
+                forecast_preview += f"\n  ... ({horizon - 10} more periods)"
+            
             self.results_text.setPlainText(
                 f"{method} Forecast\n"
                 f"{'='*40}\n"
-                f"Horizon: {horizon} periods\n"
-                f"Confidence Level: {int(confidence*100)}%\n\n"
-                f"Forecast Values:\n" +
-                "\n".join([f"  t+{i+1}: {val:.4f} [{result.lower_bound[i]:.4f}, {result.upper_bound[i]:.4f}]" 
-                          for i, val in enumerate(result.forecasts[:min(10, horizon)])])
+                f"Historical points: {len(self.current_series)}\n"
+                f"Forecast horizon: {horizon} periods\n"
+                f"Confidence level: {int(confidence*100)}%\n"
+                f"Parameters: α={alpha:.2f}" + 
+                (f", β={beta:.2f}" if method != "Simple Exp Smoothing" else "") +
+                (f", γ={gamma:.2f}, period={period}" if method == "Holt-Winters" else "") +
+                f"\n\n"
+                f"Forecast Values (with {int(confidence*100)}% CI):\n" +
+                forecast_preview
             )
             self.log_callback(f"{method.lower().replace(' ', '_')}(horizon={horizon})")
         
+        except DataValidationError as e:
+            QMessageBox.critical(self, "Validation Error", str(e))
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Forecasting failed: {e}")
+            error_msg = ErrorContext.format_timeseries_error(
+                e, method, min_points=20, period=self.forecast_period.value()
+            )
+            QMessageBox.critical(self, "Forecasting Error", error_msg)
 
 
 __all__ = ["TimeSeriesWidget"]
