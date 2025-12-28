@@ -32,6 +32,12 @@ pub enum MatheMixxError {
 
     #[error("Unsupported operation: {0}")]
     UnsupportedOperation(String),
+
+    #[error("Insufficient data for operation")]
+    InsufficientData,
+
+    #[error("Time series error: {0}")]
+    TimeSeries(String),
 }
 
 impl From<ndarray_linalg::error::LinalgError> for MatheMixxError {

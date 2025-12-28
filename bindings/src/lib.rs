@@ -25,6 +25,16 @@ use ::mathemixx_core::{
     sma,
     summarize_numeric,
     wma,
+    timeseries::{
+        engle_granger_test,
+        johansen_test,
+        ArimaModel,
+        EngleGrangerResult,
+        GarchModel,
+        GrangerResult,
+        JohansenResult,
+        VarModel,
+    },
     ADFResult,
     BoxPlotData,
     ColumnInfo,
@@ -1550,6 +1560,12 @@ fn mathemixx_error_to_pyerr(value: MatheMixxError) -> PyErr {
         MatheMixxError::InvalidInput(msg) => PyValueError::new_err(format!("Invalid input: {msg}")),
         MatheMixxError::UnsupportedOperation(msg) => {
             PyRuntimeError::new_err(format!("Unsupported operation: {msg}"))
+        }
+        MatheMixxError::InsufficientData => {
+            PyValueError::new_err("Insufficient data for operation")
+        }
+        MatheMixxError::TimeSeries(msg) => {
+            PyRuntimeError::new_err(format!("Time series error: {msg}"))
         }
         MatheMixxError::Io(err) => PyRuntimeError::new_err(err.to_string()),
         MatheMixxError::Polars(err) => PyRuntimeError::new_err(err.to_string()),
